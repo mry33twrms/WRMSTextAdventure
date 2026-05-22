@@ -1,4 +1,4 @@
-npcDict = {
+npc_dict = {
     "Goose": {
         "name": "Goostopher",
         "desc": "A large, aggressive goose. It looks like it has been here for a while.",

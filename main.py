@@ -1,16 +1,18 @@
-from rooms import roomdict
-from npcs import npcDict
+from rooms import room_dict
+from npcs import npc_dict
+import sys
 
 game_running = True
+current_room = "front admin"
 
 def displayRoom(room_name):
-    print(roomdict[room_name]["name"])
+    print(room_dict[room_name]["name"])
     print()
-    print(roomdict[room_name]["desc"])
+    print(room_dict[room_name]["desc"])
     print()
 
     exit_list = []
-    for exit in roomdict[room_name]["exits"].keys():
+    for exit in room_dict[room_name]["exits"].keys():
         if exit == "n": exit_list.append("North")
         elif exit == "s": exit_list.append("South")
         elif exit == "e": exit_list.append("East")
@@ -22,16 +24,28 @@ def displayRoom(room_name):
     print(", ".join(exit_list))
 
 def look(target, room_name):
-    for t in roomdict[room_name]["npcs"]:
+    for t in room_dict[room_name]["npcs"]:
         if target == t:
-            return npcDict[t]["desc"]
+            return npc_dict[t]["desc"]
 
-    
+command_dict = {
+    "quit" : sys.exit(),
+}
 
 
 while game_running:
     
-    displayRoom("driveway")
+    displayRoom(current_room)
 
-    game_running = False
+    response = input(">> ")
+    
+    if response in command_dict.keys():
+        command_dict[response]
+#    elif response in roomdict[current_room]["exits"].keys():
+#       current_room = roomdict[current_room]["exits"][response]
+    else:
+        print("Invalid command.")
+
+        
+
 

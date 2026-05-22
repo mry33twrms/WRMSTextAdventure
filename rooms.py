@@ -1,4 +1,4 @@
-roomdict = {
+room_dict = {
 
     "front admin" : {
         "name" : "Front Administration Lobby",
