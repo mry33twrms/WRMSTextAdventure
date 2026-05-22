@@ -1,4 +1,5 @@
 from rooms import roomdict
+from npcs import npcDict
 
 game_running = True
 
@@ -20,6 +21,12 @@ def displayRoom(room_name):
     
     print(", ".join(exit_list))
 
+def look(target, room_name):
+    for t in roomdict[room_name]["npcs"]:
+        if target == t:
+            return npcDict[t]["desc"]
+
+    
 
 
 while game_running:
