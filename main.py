@@ -28,24 +28,24 @@ def look(target, room_name):
         if target == t:
             return npc_dict[t]["desc"]
 
-command_dict = {
-    "quit" : sys.exit(),
+def help():
+    for i in commands_dict:
+        print(f'- {i}')
+
+commands_dict = {
+    "quit" : lambda: sys.exit(),
+    "help" : help
 }
 
 
+
 while game_running:
-    
-    displayRoom(current_room)
 
     response = input(">> ")
     
-    if response in command_dict.keys():
-        command_dict[response]
-#    elif response in roomdict[current_room]["exits"].keys():
-#       current_room = roomdict[current_room]["exits"][response]
+    if response in commands_dict.keys():
+        commands_dict[response]()
     else:
         print("Invalid command.")
 
-        
-
-
+    displayRoom(current_room)
