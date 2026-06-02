@@ -29,12 +29,30 @@ def look(target, room_name):
             return npc_dict[t]["desc"]
 
 def help():
-    for i in commands_dict:
-        print(f'- {i}')
+    for command in commands_dict.keys():
+        print(f"{command} - {commands_dict[command]['desc']}")
+
+def change_room():
+    global current_room
+    new_room = input("Enter room name: ")
+    if new_room in room_dict.keys():
+        current_room = new_room
+    else:
+        print("Invalid room name.")
 
 commands_dict = {
-    "quit" : lambda: sys.exit(),
-    "help" : help
+    "quit": {
+        "func": lambda: sys.exit(),
+        "desc": "Quit the program."     
+    },
+    "help": {
+        "func": help,
+        "desc": "Lists all commands and their descriptions."
+    },
+    "change room": {
+        "func": change_room,
+        "desc": "Change the current room."
+    }
 }
 
 
@@ -44,8 +62,8 @@ while game_running:
     response = input(">> ")
     
     if response in commands_dict.keys():
-        commands_dict[response]()
+        commands_dict[response]["func"]()
     else:
-        print("Invalid command.")
+        print("Invalid input. Type 'help' for command list.")
 
     displayRoom(current_room)
