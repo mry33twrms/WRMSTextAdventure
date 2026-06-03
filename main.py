@@ -1,19 +1,22 @@
-from rooms import room_dict
-from npcs import npc_dict
-from commands import * # This means to import all functions and variables.
+import commands
+from commands import *
+from player import Player
 import sys
 
 game_running = True
-current_room = "front admin"
+
+player1 = Player("Player", "front admin")
 
 while game_running:
 
-    displayRoom(current_room)
+    displayRoom(player1.current_room)
+
     response = input(">> ")
-    response = response.casefold() # This allows for case-insensitive input.
-    
-    if dir_check(response) in commands_dict.keys():
-        commands_dict[dir_check(response)]["func"]()
+    response = response.casefold()
+
+    command = dir_check(response)
+
+    if command in commands_dict:
+        commands_dict[command]["func"](player1)
     else:
         print("Invalid input. Type 'help' for command list.")
-
