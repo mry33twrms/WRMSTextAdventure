@@ -43,13 +43,21 @@ def change_room():
 # If the argument entered it is not a direction it will return the original argument.
 
 def dir_check(direction): 
-    if direction.casefold() == "n" or direction == "North": return "north"
-    elif direction.casefold() == "s" or direction == "South": return "south"
-    elif direction.casefold() == "e" or direction == "East": return "east"
-    elif direction.casefold() == "w" or direction == "West": return "west"
-    elif direction.casefold() == "u" or direction == "Up": return "up"
-    elif direction.casefold() == "d" or direction == "Down": return "down"
+    if direction.casefold() == "n" or direction == "north": return "n"
+    elif direction.casefold() == "s" or direction == "south": return "s"
+    elif direction.casefold() == "e" or direction == "east": return "e"
+    elif direction.casefold() == "w" or direction == "west": return "w"
+    elif direction.casefold() == "u" or direction == "up": return "u"
+    elif direction.casefold() == "d" or direction == "down": return "d"
     else: return direction
+
+def move_player(direction):
+    global current_room
+    if direction in room_dict[current_room]["exits"].keys():
+        current_room = room_dict[current_room]["exits"][direction]
+        print(f"You go {direction}.")
+    else:
+        print("You can't go that way.")
 
 commands_dict = {
     "quit": {
@@ -64,28 +72,28 @@ commands_dict = {
         "func": change_room,
         "desc": "Change the current room."
     },
-    "north": {
-        "func": lambda: print("You go north."),
+    "n": {
+        "func": lambda: move_player("n"),
         "desc": "Move north."
     },
-    "south": {
-        "func": lambda: print("You go south."),
+    "s": {
+        "func": lambda: move_player("s"),
         "desc": "Move south."
     },
-    "east": {
-        "func": lambda: print("You go east."),
+    "e": {
+        "func": lambda: move_player("e"),
         "desc": "Move east."
     },
-    "west": {
-        "func": lambda: print("You go west."),
+    "w": {
+        "func": lambda: move_player("w"),
         "desc": "Move west."
     },
-    "up": {
-        "func": lambda: print("You go up."),
+    "u": {
+        "func": lambda: move_player("u"),
         "desc": "Move up."
     },
-    "down": {
-        "func": lambda: print("You go down."),
+    "d": {
+        "func": lambda: move_player("d"),
         "desc": "Move down."
     },
 }

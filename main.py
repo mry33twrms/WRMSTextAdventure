@@ -10,8 +10,8 @@ while game_running:
 
     displayRoom(current_room)
     response = input(">> ")
+    response = response.casefold() # This allows for case-insensitive input.
     
-
     if dir_check(response) in commands_dict.keys():
         commands_dict[dir_check(response)]["func"]()
     else:
