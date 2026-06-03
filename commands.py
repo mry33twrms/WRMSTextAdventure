@@ -8,6 +8,11 @@ def displayRoom(room_name):
     print()
     print(room_dict[room_name]["desc"])
     print()
+    if room_dict[room_name]["npcs"]:
+        print("You see:")
+        for npc in room_dict[room_name]["npcs"]:
+            print(f"- {npc_dict[npc]['name']}:\n{npc_dict[npc]['desc']}")
+        print()
 
     exit_list = []
 
