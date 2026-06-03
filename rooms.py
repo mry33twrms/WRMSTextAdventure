@@ -67,52 +67,56 @@ room_dict = {
             'e':'student centre',
         },
     },
-    "O and M" : {
-    "name" : "O and M room",
-    "desc" : "A large room with a cane holder containing lots of different sized white canes on the right side of the room enterance.",
-    "exits" : {
-        "s" : "cafeteeria"
-        },
-    "cafeteeria" : {
-    "name" : "cafeteeria",
-    "desc" : "a very large, rectangular shaped room filled with lots of chairs and tables in the center of the room.",
-    "exits" : {
-        "s" : "bus hall"
-        },
-    "Brant Place" : {
-    "name" : "Brant Place",
-    "desc" : "wood chips and swings can be found along side benches and picnic tables and grass.",
-    "exits" : {
-        "s" : "Seinior residence"
-        },
-    "Seinior residence" : {
-    "name" : "Seinior lodge",
-    "desc" : "Concrete building with 3 levels of apartment style areas.",
-    "exits" : {
-        "s" : "Junior residence"
-        },
-
+    "o and m room" : {
+        "name" : "O and M room",
+        "desc" : "A large room with a cane holder containing lots of different sized white canes on the right side of the room enterance.",
+        "exits" : {
+            "e" : "cafeteria"
+            },
+    },
+    "cafeteria" : {
+        "name" : "cafeteria",
+        "desc" : "a very large, rectangular shaped room filled with lots of chairs and tables in the center of the room.",
+        "exits" : {
+            "s" : "bus hall",
+            "w" : "o and m room"
+            },
+    },
+    "brant place" : {
+        "name" : "Brant Place",
+        "desc" : "wood chips and swings can be found along side benches and picnic tables and grass.",
+        "exits" : {
+            "s" : "senior residence"
+            },
+    },
+    "senior residence" : {
+        "name" : "senior lodge",
+        "desc" : "Concrete building with 3 levels of apartment style areas.",
+        "exits" : {
+            "s" : "junior residence"
+            },
+    },
     "junior residence" : {
     "name" : "Neil lodge",
     "desc" : "Similar to seinior  lodge but for junior students. There is only 1 floor, not 3.",
     "exits" : {
-        "s" : "Activity room"
+        "s" : "activity room"
         },
+    },
 
-    "Activity room" : {
-    "name" : "Activity room",
+    "activity room" : {
+    "name" : "activity room",
     "desc" : "a room with crafts and games.",
     "exits" : {
         "s" : "music wing"
         },
-    "Music wing" : {
+    },
+    "music wing" : {
     "name" : "music wing",
     "desc" : "a long hall way with a piano studio, practice rooms, and music production rooms surounding the hall way.",
     "exits" : {
         "s" : "auditoriom"
         },
-
-}
-
+    },
 
 }
