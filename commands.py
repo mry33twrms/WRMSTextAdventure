@@ -91,6 +91,13 @@ def move_player(direction, player):
     else:
         print("You can't go that way.")
 
+def bonk(player, mob):
+    if mob in room_dict[player.current_room]["mobs"]:
+        print(f"You bonk the {mob} on the head. It looks at you confusedly.")
+        room_dict[player.current_room]["mobs"].remove(mob)
+        del room_dict[player.current_room]["mobs"][mob]
+    else:
+        print(f"There is no {mob} here to bonk.")
 
 commands_dict = {
 
@@ -107,6 +114,11 @@ commands_dict = {
     "change room": {
         "func": change_room,
         "desc": "Change the current room."
+    },
+    
+    "bonk": {
+        "func": lambda player: bonk(player, input("Enter mob name: ")),
+        "desc": "Bonk a mob on the head to remove it from the room."
     },
 
     "n": {
