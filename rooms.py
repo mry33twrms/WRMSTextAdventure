@@ -1,5 +1,12 @@
 room_dict = {
 
+    "menu" : {
+        "name" : "Main Menu",
+        "desc" : "Welcome to the WRMS Text Adventure!\nPlease enter a command to continure\n\nType 'help' for command list",
+        "exits" : {},
+        "npcs" : []
+    },
+
     "front admin" : {
         "name" : "Front Administration Lobby",
         "desc" : "A large open room with brick walls, a skylight, and a reception desk.",

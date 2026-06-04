@@ -1,12 +1,10 @@
-import commands
 from commands import *
 from player import Player
-import sys
 
 def main():
     game_running = True
 
-    player1 = Player("Player", "front admin")
+    player1 = Player("Player", "menu")
 
     while game_running:
 
