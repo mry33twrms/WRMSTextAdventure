@@ -2,6 +2,8 @@ from rooms import room_dict
 from npcs import npc_dict
 import sys
 
+def quit(player=None):
+    sys.exit()
 
 def displayRoom(room_name):
     print(room_dict[room_name]["name"])
@@ -74,7 +76,6 @@ def dir_check(direction):
     else:
         return direction
 
-
 def move_player(direction, player):
 
     current_room = player.current_room
@@ -94,7 +95,7 @@ def move_player(direction, player):
 commands_dict = {
 
     "quit": {
-        "func": lambda player: sys.exit(),
+        "func": quit,
         "desc": "Quit the program."
     },
 
