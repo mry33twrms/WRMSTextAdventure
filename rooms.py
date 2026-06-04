@@ -23,7 +23,8 @@ room_dict = {
         "exits" : {
             "s" : "front admin"
             },
-        "npcs" : ["Goose"]
+        "npcs" : ["Goose"],
+        "mobs" : ["orc guard"]
     },
     'back admin' : {
         'name' : 'Back Administration',

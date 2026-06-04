@@ -20,12 +20,12 @@ class mob:
 
 
 mob_dict = {
-    "Goblin" : {"hp": 10, "attack": 4, "weakness": "Fire"},
-    "Hydrogen Elemental" : {"hp": 82, "attack": 15, "weakness": "Oxygen"},
-    "Parabola" : {"hp": 100, "attack": 20, "weakness": "Calculator"},
-    "Insane Doctor" : {"hp": 35, "attack": 8, "weakness": "Therapy"},
-    "Possessed Canes" : {"hp": 20, "attack": 6,},
-    "Weaners & Beans" : {"hp": 15, "attack": 5,},
-    "Beholder": {"hp": 125, "attack": 25, "weakness": "Damaging the Eye"},
-    "Orc Guard": {"hp": 10, "attack": 5, "weakness": "Very Stupid"}
+    "goblin" : {"hp": 10, "attack": 4, "weakness": "Fire"},
+    "hydrogen elemental" : {"hp": 82, "attack": 15, "weakness": "Oxygen"},
+    "parabola" : {"hp": 100, "attack": 20, "weakness": "Calculator"},
+    "insane doctor" : {"hp": 35, "attack": 8, "weakness": "Therapy"},
+    "possessed canes" : {"hp": 20, "attack": 6,},
+    "weaners & beans" : {"hp": 15, "attack": 5,},
+    "beholder": {"hp": 125, "attack": 25, "weakness": "Damaging the Eye"},
+    "orc guard": {"hp": 10, "attack": 5, "weakness": "Very Stupid"}
 }
