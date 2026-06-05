@@ -63,4 +63,11 @@ weapon_dict = {
         "price" : 150
     },
     
+    "frying pan" : {
+        "name" : "Mr. Howe's Frying Pan",
+        "desc" : "A gift from Mr. Howe, its his prized frying pan. It's made of cast iron and is very heavy, making it great for bashing enemies.",
+        "damage" : 7,
+        "price" : 25
+    },
+    
 }
