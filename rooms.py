@@ -2,8 +2,8 @@ room_dict = {
 
     "menu" : {
         "name" : "Main Menu",
-        "desc" : "Welcome to the WRMS Text Adventure!\nPlease enter a command to continure\n\nType 'help' for command list",
-        "exits" : {},
+        "desc" : "Welcome to the WRMS Text Adventure!\nType 'Start' to continue\n\nType 'help' for command list",
+        "exits" : {'start' : 'front admin'},
         "npcs" : []
     },
 
@@ -26,6 +26,7 @@ room_dict = {
         "npcs" : ["Goose"],
         "mobs" : ["orc guard"]
     },
+    
     'back admin' : {
         'name' : 'Back Administration',
         'desc' : 'An empty room with two hallways going to the left and right of you one leads to the student centre, gym, and classsrooms, while the other leads to the bus hall and cafeteria. There is also a large window with two sets of doors going out into the courtyard.',
@@ -57,7 +58,6 @@ room_dict = {
         },
     },
 
-
     'student centre':{
         'name':'Student Centre',
         'desc':'A large room filled with tables and chairs to sit and couches, its full of students hanging out or doing homework. Campus Corner is to the right and there is an exit to the music wing in the back of the Student Centre.',
@@ -75,6 +75,7 @@ room_dict = {
             'e':'student centre',
         },
     },
+    
     "o and m room" : {
         "name" : "O and M room",
         "desc" : "A large room with a cane holder containing lots of different sized white canes on the right side of the room enterance.",
@@ -82,6 +83,7 @@ room_dict = {
             "e" : "cafeteria"
             },
     },
+    
     "cafeteria" : {
         "name" : "cafeteria",
         "desc" : "a very large, rectangular shaped room filled with lots of chairs and tables in the center of the room.",
@@ -90,6 +92,7 @@ room_dict = {
             "w" : "o and m room"
             },
     },
+    
     "brant place" : {
         "name" : "Brant Place",
         "desc" : "wood chips and swings can be found along side benches and picnic tables and grass.",
@@ -97,6 +100,7 @@ room_dict = {
             "s" : "senior residence"
             },
     },
+    
     "senior residence" : {
         "name" : "senior lodge",
         "desc" : "Concrete building with 3 levels of apartment style areas.",
@@ -104,26 +108,28 @@ room_dict = {
             "s" : "junior residence"
             },
     },
+    
     "junior residence" : {
-    "name" : "Neil lodge",
-    "desc" : "Similar to seinior  lodge but for junior students. There is only 1 floor, not 3.",
-    "exits" : {
-        "s" : "activity room"
+       "name" : "Neil lodge",
+       "desc" : "Similar to seinior lodge but for junior students. There is only 1 floor, not 3.",
+       "exits" : {
+           "s" : "activity room"
         },
     },
 
     "activity room" : {
-    "name" : "activity room",
-    "desc" : "a room with crafts and games.",
-    "exits" : {
-        "s" : "music wing"
+        "name" : "activity room",
+        "desc" : "a room with crafts and games.",
+        "exits" : {
+            "s" : "music wing"
         },
     },
+    
     "music wing" : {
-    "name" : "music wing",
-    "desc" : "a long hall way with a piano studio, practice rooms, and music production rooms surounding the hall way.",
-    "exits" : {
-        "s" : "auditoriom"
+        "name" : "music wing",
+        "desc" : "a long hall way with a piano studio, practice rooms, and music production rooms surounding the hall way.",
+        "exits" : {
+            "s" : "auditoriom"
         },
     },
 

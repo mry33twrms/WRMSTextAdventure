@@ -31,6 +31,8 @@ def displayRoom(room_name):
             exit_list.append("Up")
         elif exit == "d":
             exit_list.append("Down")
+        elif exit == "start":
+            exit_list.append("")
         else:
             exit_list.append(exit)
 
@@ -78,14 +80,17 @@ def dir_check(direction):
 
 def move_player(direction, player):
 
+    dirlist = ["n", "s", "e", "w", "u", "d"]
+
     current_room = player.current_room
 
     if direction in room_dict[current_room]["exits"]:
 
         new_room = room_dict[current_room]["exits"][direction]
-
-        print(f"You go {direction}.")
-
+        
+        if direction in dirlist:
+            print(f"You go {direction}.")
+        
         player.current_room = new_room
 
     else:
@@ -109,6 +114,11 @@ commands_dict = {
     "help": {
         "func": help,
         "desc": "Lists all commands and their descriptions."
+    },
+    
+    "start": {
+        "func": lambda player: move_player("start", player),
+        "desc": "Start the game from the main menu."
     },
 
     "change room": {
@@ -150,4 +160,5 @@ commands_dict = {
         "func": lambda player: move_player("d", player),
         "desc": "Move down."
     },
+    
 }
