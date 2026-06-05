@@ -20,8 +20,8 @@ room_dict = {
         "name" : "Front Administration Driveway",
         "desc" : "A gosse sits in a an oversized planter box. It hisses at you and you feel like you shouldn't be there.",
         "exits" : {
-            "s" : "front admin"
-            },
+            "s" : "front admin",
+            "portal": "bus hall"},
         "npcs" : ["Goose"],
         "mobs" : ["orc guard"]
     },
@@ -44,6 +44,7 @@ room_dict = {
             's':'cafeteria',
             'w':'back admin',
         },
+        'npcs' : []
     },
 
     'gym hallway':{
@@ -55,6 +56,7 @@ room_dict = {
             's':'student centre',
             'e':'back admin',
         },
+        'npcs' : []
     },
 
     'student centre':{
@@ -65,6 +67,7 @@ room_dict = {
             's':'music wing',
             'n':'gym hallway',
         },
+        'npcs' : []
     },
 
     'campus corner':{
@@ -73,6 +76,7 @@ room_dict = {
         'exits':{
             'e':'student centre',
         },
+        'npcs' : []
     },
     
     "o and m room" : {
@@ -81,6 +85,7 @@ room_dict = {
         "exits" : {
             "e" : "cafeteria"
             },
+        'npcs' : []
     },
     
     "cafeteria" : {
@@ -90,6 +95,7 @@ room_dict = {
             "s" : "bus hall",
             "w" : "o and m room"
             },
+        'npcs' : []
     },
     
     "brant place" : {
@@ -98,6 +104,7 @@ room_dict = {
         "exits" : {
             "s" : "senior residence"
             },
+        'npcs' : []
     },
     
     "senior residence" : {
@@ -106,6 +113,7 @@ room_dict = {
         "exits" : {
             "s" : "junior residence"
             },
+        'npcs' : []
     },
     
     "junior residence" : {
@@ -114,6 +122,7 @@ room_dict = {
        "exits" : {
            "s" : "activity room"
         },
+        'npcs' : []
     },
 
     "activity room" : {
@@ -122,6 +131,7 @@ room_dict = {
         "exits" : {
             "s" : "music wing"
         },
+        'npcs' : []
     },
     
     "music wing" : {
@@ -130,6 +140,7 @@ room_dict = {
         "exits" : {
             "s" : "auditoriom"
         },
+        'npcs' : []
     },
 
 }
