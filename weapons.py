@@ -63,4 +63,18 @@ weapon_dict = {
         "price" : 150
     },
     
+    "frying pan" : {
+        "name" : "Mr. Howe's Frying Pan",
+        "desc" : "A gift from Mr. Howe, its his prized frying pan. It's made of cast iron and is very heavy, making it great for bonking.",
+        "damage" : 7,
+        "price" : 25
+    },
+    
+    "trombone" : {
+        "name" : "Mr. Yeat's Trombone",
+        "desc" : "You stole Mr. Yeat's trombone and are now using it as a weapon. Your so bad at playing it that enemies die from how horrible it sounds.",
+        "damage" : 15,
+        "price" : 0
+    },
+    
 }
