@@ -4,7 +4,6 @@ room_dict = {
         "name" : "Main Menu",
         "desc" : "Welcome to the WRMS Text Adventure!\nType 'Start' to continue\n\nType 'help' for command list",
         "exits" : {'start' : 'front admin'},
-        "npcs" : []
     },
 
     "front admin" : {
