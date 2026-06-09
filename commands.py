@@ -3,6 +3,7 @@ from npcs import npc_dict
 import sys
 
 def quit(player=None):
+    game_running = False
     sys.exit()
 
 def displayRoom(room_name):
@@ -44,6 +45,11 @@ def look(target, room_name):
         if target == t:
             return npc_dict[t]["desc"]
 
+def list_rooms(player=None):
+    print("Rooms:")
+    for room in room_dict.keys():
+        print(f"- {room_dict[room]['name']}")
+
 
 def help(player=None):
     for command in commands_dict.keys():
@@ -56,7 +62,7 @@ def change_room(player):
     if new_room in room_dict:
         player.current_room = new_room
     else:
-        print("Invalid room name.")
+        print(f"Room: {new_room} was not found in the room_dict")
 
 
 def dir_check(direction):
@@ -124,6 +130,11 @@ commands_dict = {
     "change room": {
         "func": change_room,
         "desc": "Change the current room."
+    },
+    
+    "list rooms": {
+        "func": list_rooms,
+        "desc": "List all rooms in the game."
     },
     
     "bonk": {
