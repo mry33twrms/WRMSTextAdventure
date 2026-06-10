@@ -1,2 +1,15 @@
 __pycache__/
-*.py[cod]
+*.pyc[cod]
+*.cpython-*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+*.log
+*.bak
+*.swp
+.DS_Store
+.idea/
