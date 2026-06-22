@@ -1,26 +1,82 @@
-from commands import *
+import asyncio
 from player import Player
+import game_state
+from commands import handle_command, display_room
 
-def main():
-    game_running = True
+HOST = "0.0.0.0"
+PORT = 4000
 
-    player1 = Player("Player", "menu")
 
-    while game_running:
+async def handle_client(reader, writer):
+    addr = writer.get_extra_info("peername")
+    print(f"Connection from {addr}")
 
-        displayRoom(player1.current_room)
+    writer.write(b"Enter your name: ")
+    await writer.drain()
 
-        response = input(">> ")
-        response = response.casefold()
+    try:
+        name_bytes = await asyncio.wait_for(reader.readline(), timeout=30)
+    except asyncio.TimeoutError:
+        writer.close()
+        return
 
-        command = dir_check(response)
+    name = name_bytes.decode(errors="replace").strip()
+    if not name:
+        writer.write(b"No name entered. Goodbye.\n")
+        await writer.drain()
+        writer.close()
+        return
 
-        if command in commands_dict:
-            commands_dict[command]["func"](player1)
-        elif command in room_dict[player1.current_room]["exits"]:
-            move_player(command, player1)
-        else:
-            print("Invalid input. Type 'help' for command list.")
+    if name in game_state.players:
+        writer.write(f"Name '{name}' is already taken. Try another.\n".encode())
+        await writer.drain()
+        writer.close()
+        return
+
+    player = Player(name, "menu", writer)
+    game_state.players[name] = player
+
+    for p in game_state.players.values():
+        if p is not player:
+            await p.send(f"*** {name} has entered the MUD. ***")
+
+    await display_room("menu", player)
+
+    try:
+        while not player.quitting:
+            writer.write(b"\n>> ")
+            await writer.drain()
+
+            try:
+                line = await reader.readline()
+            except (ConnectionResetError, BrokenPipeError, OSError):
+                break
+
+            if not line:
+                break
+
+            await handle_command(line.decode(errors="replace"), player, game_state)
+
+    finally:
+        game_state.players.pop(name, None)
+        for p in game_state.players.values():
+            await p.send(f"*** {name} has left the MUD. ***")
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except OSError:
+            pass
+        print(f"{name} disconnected from {addr}")
+
+
+async def main():
+    server = await asyncio.start_server(handle_client, HOST, PORT)
+    addrs = ", ".join(str(s.getsockname()) for s in server.sockets)
+    print(f"WRMS MUD running on {addrs}")
+    print(f"Connect with:  telnet localhost {PORT}")
+    async with server:
+        await server.serve_forever()
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

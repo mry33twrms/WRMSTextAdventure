@@ -1,0 +1,1 @@
+players = {}  # name -> Player instance
