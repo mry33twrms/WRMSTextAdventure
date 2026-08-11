@@ -3,6 +3,7 @@ from player import Player
 import game_state
 from commands import handle_command, display_room
 
+VERSION = "0.04"
 HOST = "0.0.0.0"
 PORT = 4000
 
@@ -33,8 +34,9 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    player = Player(name, "menu", writer)
+    player = Player(name, "menu", writer,attack=5, hp=20, gold=0, inventory=[], max_inventory=10, max_hp=20, defense=0)
     game_state.players[name] = player
+    await player.send(f"WRMS MUD v{VERSION}")
 
     for p in game_state.players.values():
         if p is not player:
@@ -72,8 +74,8 @@ async def handle_client(reader, writer):
 async def main():
     server = await asyncio.start_server(handle_client, HOST, PORT)
     addrs = ", ".join(str(s.getsockname()) for s in server.sockets)
-    print(f"WRMS MUD running on {addrs}")
-    print(f"Connect with:  telnet localhost {PORT}")
+    print(f"WRMS MUD v{VERSION} running on {addrs}")
+    print(f"Connect with:  python3 client.py")
     async with server:
         await server.serve_forever()
 

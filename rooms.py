@@ -14,7 +14,8 @@ room_dict = {
             "n" : "driveway",
             "s" : "back admin"
             },
-        "npcs" : ["Kristi"]
+        "npcs" : ["Kristi"],
+        "items" : ["leather", "short sword", "health potion"]
     },
 
     "driveway" : {
@@ -24,7 +25,7 @@ room_dict = {
             "s" : "front admin",
             "portal": "bus hall"},
         "npcs" : ["Goose"],
-        "mobs" : ["orc guard"]
+        "mobs" : ["goblin"]
     },
     
     'back admin' : {

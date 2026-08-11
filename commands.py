@@ -1,5 +1,9 @@
+import asyncio
+from mobs import mob, mob_dict
 from rooms import room_dict
 from npcs import npc_dict
+from weapons import weapon_dict
+from equipment import equipment_lookup, consumables_dict
 import game_state
 
 DIR_ALIASES = {
@@ -18,10 +22,81 @@ OPPOSITE_DIR = {
 }
 
 
+def _item_info(item_key):
+    """Return the info dict for an item key across all lookup dicts, or None."""
+    if item_key in weapon_dict:
+        return weapon_dict[item_key]
+    if item_key in equipment_lookup:
+        return equipment_lookup[item_key]
+    if item_key in consumables_dict:
+        return consumables_dict[item_key]
+    return None
+
+def _item_display_name(item_key):
+    info = _item_info(item_key)
+    return info["name"] if info else item_key
+
+
+def _find_item(query, item_keys):
+    """Match a player's typed query against a list of item keys.
+
+    Returns (matched_key, error_string). If matched_key is None and error_string
+    is None, nothing was found. If error_string is set, there were multiple matches.
+    """
+    q = query.casefold().strip()
+    # 1. Exact key match
+    if q in item_keys:
+        return q, None
+    # 2. Exact display-name match
+    for key in item_keys:
+        info = _item_info(key)
+        if info and info["name"].casefold() == q:
+            return key, None
+    # 3. Partial match against key or display name
+    matches = []
+    for key in item_keys:
+        info = _item_info(key)
+        display = info["name"].casefold() if info else key
+        if q in key or q in display:
+            matches.append(key)
+    if len(matches) == 1:
+        return matches[0], None
+    if len(matches) > 1:
+        names = ", ".join(_item_display_name(k) for k in matches)
+        return None, f"'{query}' matches multiple items: {names}. Be more specific."
+    return None, None
+
+
+def _find_mob(query, mob_list):
+    """Match a typed query against a list of live mob instances."""
+    q = query.casefold().strip()
+    # Exact key match
+    exact = next((m for m in mob_list if m.name == q), None)
+    if exact:
+        return exact
+    # Partial match against key or display name
+    matches = [
+        m for m in mob_list
+        if q in m.name or q in mob_dict[m.name]["name"].casefold()
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 async def broadcast_room(room_name, msg, exclude=None):
     for p in game_state.players.values():
         if p.current_room == room_name and p is not exclude:
             await p.send(msg)
+
+
+def _get_room_mobs(room_name):
+    """Return the live mob list for a room, initialising it from room_dict if needed."""
+    if room_name not in game_state.room_mobs:
+        game_state.room_mobs[room_name] = [
+            mob(key, mob_dict[key]["hp"], mob_dict[key]["attack"])
+            for key in room_dict[room_name].get("mobs", [])
+            if key in mob_dict
+        ]
+    return game_state.room_mobs[room_name]
 
 
 async def display_room(room_name, player):
@@ -32,10 +107,14 @@ async def display_room(room_name, player):
     for npc_key in room.get("npcs", []):
         npc = npc_dict[npc_key]
         visible.append(f"- {npc['name']}: {npc['desc']}")
+    for m in _get_room_mobs(room_name):
+        info = mob_dict[m.name]
+        visible.append(f"- {info['name']}: {info['desc']}")
     for p in game_state.players.values():
         if p.current_room == room_name and p is not player:
             visible.append(f"- {p.name} is here.")
-
+    for item_key in room.get("items", []):
+        visible.append(f"- {_item_display_name(item_key)} is on the ground.")
     if visible:
         lines.append("You see:")
         lines.extend(visible)
@@ -66,6 +145,10 @@ async def cmd_look(player, args, gs):
     for p in gs.players.values():
         if p.current_room == player.current_room and target in p.name.casefold():
             await player.send(f"{p.name} is a player adventuring through WRMS.")
+            return
+    for m in _get_room_mobs(player.current_room):
+        if target in m.name.casefold():
+            await player.send(mob_dict[m.name]["desc"])
             return
     await player.send(f"You don't see '{args}' here.")
 
@@ -115,9 +198,10 @@ async def cmd_bonk(player, args, gs):
     if not args:
         await player.send("Usage: bonk <mob name>")
         return
-    mobs = room_dict[player.current_room].get("mobs", [])
-    if args in mobs:
-        mobs.remove(args)
+    live_mobs = _get_room_mobs(player.current_room)
+    target = _find_mob(args, live_mobs)
+    if target:
+        live_mobs.remove(target)
         await player.send(f"You bonk the {args} on the head. It wanders off confused.")
         await broadcast_room(player.current_room, f"{player.name} bonks the {args} on the head!", exclude=player)
     else:
@@ -156,17 +240,206 @@ async def cmd_move(player, direction, gs):
     player.current_room = new_room_key
     await display_room(new_room_key, player)
 
+async def _respawn_mob(room_name, mob_key, delay):
+    await asyncio.sleep(delay)
+    info = mob_dict[mob_key]
+    new_mob = mob(mob_key, info["hp"], info["attack"])
+    game_state.room_mobs.setdefault(room_name, []).append(new_mob)
+    await broadcast_room(room_name, f"A {info['name']} has appeared!")
+
+
+async def cmd_attack(player, args, _gs):
+    if not args:
+        await player.send("Usage: attack <mob name>")
+        return
+
+    room_name = player.current_room
+    live_mobs = _get_room_mobs(room_name)
+
+    target = _find_mob(args, live_mobs)
+    if target is None:
+        await player.send(f"There is no '{args}' here to attack.")
+        return
+
+    damage = player.attack
+    died = target.take_damage(damage)
+    await player.send(f"You attack the {target.name} for {damage} damage! ({target.hp} HP remaining)")
+    await broadcast_room(room_name, f"{player.name} attacks the {target.name}!", exclude=player)
+
+    if died:
+        live_mobs.remove(target)
+        gold = mob_dict.get(args, {}).get("gold", 0)
+        player.gold += gold
+        defeat_msg = f"You defeated the {target.name}!"
+        if gold:
+            defeat_msg += f" You find {gold} gold."
+        await player.send(defeat_msg)
+        await broadcast_room(room_name, f"The {target.name} has been defeated by {player.name}!", exclude=player)
+        respawn_time = mob_dict[args].get("respawn_time", 60)
+        asyncio.create_task(_respawn_mob(room_name, args, respawn_time))
+    else:
+        mob_damage = target.deal_damage()
+        player.hp -= mob_damage
+        await player.send(f"The {target.name} hits you for {mob_damage} damage! ({player.hp}/{player.max_hp} HP)")
+        if player.hp <= 0:
+            player.hp = player.max_hp
+            player.current_room = "front admin"
+            await player.send("You have been defeated and wake up back at the front lobby.")
+            await broadcast_room(room_name, f"{player.name} was defeated by the {target.name}!", exclude=player)
+            await display_room("front admin", player)
+
+async def cmd_use(player, args, _gs):
+    if not args:
+        await player.send("Usage: use <item name>")
+        return
+    item_key, err = _find_item(args, player.inventory)
+    if err:
+        await player.send(err); return
+    if item_key is None:
+        await player.send(f"You don't have '{args}'."); return
+    if item_key not in consumables_dict:
+        await player.send(f"'{args}' can't be used that way. Try 'equip' instead.")
+        return
+    info = consumables_dict[item_key]
+    if "heal" in info:
+        healed = min(info["heal"], player.max_hp - player.hp)
+        player.hp += healed
+        await player.send(f"You use the {info['name']} and restore {healed} HP. ({player.hp}/{player.max_hp} HP)")
+    elif info.get("name") == "Recall Scroll":
+        player.current_room = "front admin"
+        await player.send("The scroll glows and you are whisked back to the lobby.")
+        await display_room("front admin", player)
+    else:
+        await player.send(f"You use the {info['name']}. (effect not yet implemented)")
+    player.inventory.remove(item_key)
+
+
+async def cmd_get(player, args, _gs):
+    if not args:
+        await player.send("Usage: get <item name>")
+        return
+    items = room_dict[player.current_room].get("items", [])
+    item_key, err = _find_item(args, items)
+    if err:
+        await player.send(err); return
+    if item_key is None:
+        await player.send(f"There is no '{args}' here."); return
+    if len(player.inventory) >= player.max_inventory:
+        await player.send("Your inventory is full."); return
+    items.remove(item_key)
+    player.inventory.append(item_key)
+    name = _item_display_name(item_key)
+    await player.send(f"You pick up the {name}.")
+    await broadcast_room(player.current_room, f"{player.name} picks up the {name}.", exclude=player)
+
+
+async def cmd_drop(player, args, _gs):
+    if not args:
+        await player.send("Usage: drop <item name>")
+        return
+    item_key, err = _find_item(args, player.inventory)
+    if err:
+        await player.send(err); return
+    if item_key is None:
+        await player.send(f"You don't have '{args}'."); return
+    if item_key in player.equipped_items.values():
+        await player.send(f"Unequip '{_item_display_name(item_key)}' before dropping it.")
+        return
+    player.inventory.remove(item_key)
+    room_dict[player.current_room].setdefault("items", []).append(item_key)
+    name = _item_display_name(item_key)
+    await player.send(f"You drop the {name}.")
+    await broadcast_room(player.current_room, f"{player.name} drops the {name}.", exclude=player)
+
+
+async def cmd_inventory(player, _args, _gs):
+    equipped_keys = {k for k in player.equipped_items.values() if k}
+    lines = [f"Inventory ({len(player.inventory)}/{player.max_inventory}):"]
+    for slot, key in player.equipped_items.items():
+        if key:
+            lines.append(f"  [{slot}] {_item_display_name(key)} (equipped)")
+    for key in player.inventory:
+        if key not in equipped_keys:
+            lines.append(f"  {_item_display_name(key)}")
+    if not player.inventory and not equipped_keys:
+        lines.append("  (empty)")
+    lines.append(f"Gold: {player.gold}  HP: {player.hp}/{player.max_hp}  ATK: {player.attack}  DEF: {player.defense}")
+    await player.send("\n".join(lines))
+
+
+async def cmd_equip(player, args, _gs):
+    if not args:
+        await player.send("Usage: equip <item name>")
+        return
+    item_key, err = _find_item(args, player.inventory)
+    if err:
+        await player.send(err); return
+    if item_key is None:
+        await player.send(f"You don't have '{args}'."); return
+    if item_key in weapon_dict:
+        info = weapon_dict[item_key]
+        slot = "weapon"
+    elif item_key in equipment_lookup:
+        info = equipment_lookup[item_key]
+        slot = info["slot"]
+    else:
+        await player.send(f"'{args}' can't be equipped. Use 'use' for consumables.")
+        return
+    if player.equipped_items[slot]:
+        current = _item_display_name(player.equipped_items[slot])
+        await player.send(f"You already have {current} in your {slot} slot. Unequip it first.")
+        return
+    player.equipped_items[slot] = item_key
+    if "damage" in info:
+        player.attack += info["damage"]
+    if "defense" in info:
+        player.defense += info["defense"]
+    await player.send(f"You equip the {info['name']}.  ATK: {player.attack}  DEF: {player.defense}")
+
+
+async def cmd_unequip(player, args, _gs):
+    if not args:
+        await player.send("Usage: unequip <item name>")
+        return
+    equipped_keys = [k for k in player.equipped_items.values() if k]
+    item_key, err = _find_item(args, equipped_keys)
+    if err:
+        await player.send(err); return
+    if item_key is None:
+        await player.send(f"You don't have '{args}' equipped."); return
+    slot = next(s for s, k in player.equipped_items.items() if k == item_key)
+    if item_key in weapon_dict:
+        player.attack -= weapon_dict[item_key]["damage"]
+    elif item_key in equipment_lookup:
+        info = equipment_lookup[item_key]
+        if "defense" in info:
+            player.defense -= info["defense"]
+    player.equipped_items[slot] = None
+    await player.send(f"You unequip the {_item_display_name(item_key)}.  ATK: {player.attack}  DEF: {player.defense}")
+
 
 commands_dict = {
     "quit":        {"func": cmd_quit,        "desc": "Disconnect from the MUD."},
     "help":        {"func": cmd_help,        "desc": "List all commands."},
-    "look":        {"func": cmd_look,        "desc": "Look at the room, or 'look <name>' to examine someone."},
+    "look":        {"func": cmd_look,        "desc": "Look at the room, or 'look <name>' to examine something."},
+    "l":           {"func": cmd_look,        "desc": "Alias for look."},
     "say":         {"func": cmd_say,         "desc": "Say something to everyone in the room."},
     "who":         {"func": cmd_who,         "desc": "List all connected players."},
     "start":       {"func": cmd_start,       "desc": "Start the game from the main menu."},
     "list rooms":  {"func": cmd_list_rooms,  "desc": "List all rooms in the game."},
     "change room": {"func": cmd_change_room, "desc": "Teleport to a room: change room <name>"},
     "bonk":        {"func": cmd_bonk,        "desc": "Bonk a mob: bonk <mob name>"},
+    "attack":      {"func": cmd_attack,      "desc": "Attack a mob: attack <mob name>"},
+    "use":       {"func": cmd_use,       "desc": "Use a consumable: use <item name>"},
+    "get":       {"func": cmd_get,       "desc": "Pick up an item from the room: get <item name>"},
+    "take":      {"func": cmd_get,       "desc": "Alias for get."},
+    "pick up":   {"func": cmd_get,       "desc": "Alias for get."},
+    "drop":      {"func": cmd_drop,      "desc": "Drop an item: drop <item name>"},
+    "inventory": {"func": cmd_inventory, "desc": "Show your inventory, stats, and equipped items."},
+    "inv":       {"func": cmd_inventory, "desc": "Alias for inventory."},
+    "i":         {"func": cmd_inventory, "desc": "Alias for inventory."},
+    "equip":     {"func": cmd_equip,     "desc": "Equip an item to its slot: equip <item name>"},
+    "unequip":   {"func": cmd_unequip,   "desc": "Unequip an item: unequip <item name>"},
     "n":  {"func": lambda p, a, gs: cmd_move(p, "n", gs),  "desc": "Move north."},
     "s":  {"func": lambda p, a, gs: cmd_move(p, "s", gs),  "desc": "Move south."},
     "e":  {"func": lambda p, a, gs: cmd_move(p, "e", gs),  "desc": "Move east."},
