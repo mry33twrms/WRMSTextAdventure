@@ -58,3 +58,56 @@
 - All item commands (`get`, `drop`, `equip`, `unequip`, `use`) use fuzzy matching — "get leather armor" and "get armor" both work
 - `attack` and `bonk` use fuzzy mob matching — "attack orc" finds `orc guard`
 - Added command aliases: `inv` / `i` → inventory; `l` → look; `take` / `pick up` → get
+
+---
+
+## v0.05 — Special Exits System
+- Replaced one-off `start` command with general `go` / `enter` commands for special (non-directional) exits
+- Added `DIRECTIONS` constant (`{"n","s","e","w","u","d"}`) to cleanly separate special exits from directional ones
+- Added `_find_special_exit(query, room_name)` — fuzzy helper: exact match → partial substring match; returns `None` if ambiguous
+- `go <name>` / `enter <name>` fuzzy-match and traverse any special exit in the current room
+- `go` / `enter` with no argument lists available special exits
+- Typing an exit name directly (e.g. `portal`) also works via fallback at the bottom of `handle_command`
+- `display_room` now shows cardinal exits and special exits on separate lines ("Exits:" / "Special exits:")
+- Removed the `start` command from `commands_dict`; `start` still works via the direct-exit fallback
+
+---
+
+## v0.06 — Loot Drop System
+- Added `tier_weight(tier)` — returns `1 / (2 ** (tier - 1))`; higher tiers drop exponentially less often
+- Added `_item_tier(item_key)` — looks up `"tier"` field across all item dicts, defaults to 1
+- Added `choose_loot(mob_name)` — picks one item from the mob's loot list using `random.choices` with tier-based weights
+- `cmd_attack`: on mob defeat, calls `choose_loot` and drops the result to the room floor; announces the drop to the player
+- Fixed `cmd_attack` defeat block: was using raw typed args for `mob_dict` lookups (broke fuzzy-matched names); now uses `target.name`
+- Added `"cloth shirt"` to `armor_dict` (tier 1) — referenced in mob loot tables but was missing
+- Added `gloves_dict` to `equipment_lookup` with slot `"gloves"`; added `"gloves"` slot to `Player.equipped_items`
+- Expanded `_item_info` to also check `materials_dict` for proper display names on material drops
+
+---
+
+## v0.07 — NPC Conversation System
+- Added `Player.talking_to` — tracks the NPC key the player is currently in conversation with
+- Added `GREETINGS` and `FAREWELLS` constant sets for trigger word detection
+- Added `_conversable_npc(room_name)` — returns the first NPC in the room that has a `convos` dict
+- Added `handle_npc_convo(player, text, npc_key)` — matches player message against convo keywords (substring search), falls back to `"default"`, ends conversation on farewell words
+- Added `_run_convo_action(player, entry)` — action dispatcher for convo entries that are dicts; currently supports `"transport"` (charges optional gold cost, moves player to destination)
+- Updated `cmd_say`: greeting words in a room with a conversable NPC initiate conversation; subsequent `say` commands route through the convo system; normal say otherwise
+- Moving rooms automatically clears `player.talking_to`
+- Convo entries support plain strings or action dicts: `{"text": "...", "action": "transport", "cost": 10, "destination": "room_key", "cost_msg": "..."}`
+- Fixed `rooms.py` syntax error: `campus corner` `shop` property was written as a mixed list/dict — corrected to a proper dict
+
+---
+
+## v0.08 — NPC Shop System
+- Moved shop data from `rooms.py` to the NPC entry in `npcs.py` — shop travels with the NPC, not the room
+- `shop` dict on an NPC has two keys: `sell_dict` (items NPC sells → price player pays) and `buy_dict` (set prices NPC pays when buying from player)
+- Added `Player.pending_transaction` — holds `{"type": "buy"/"sell", "item_key": ..., "price": ...}` while awaiting confirmation
+- Added `_sell_price(item_key, shop)` — returns `buy_dict` price if listed, otherwise 50% of item base price (min 1)
+- Added `_shop_list_sell` / `_shop_list_buy` — display sell and buy menus
+- Added `_shop_buy_item` / `_shop_sell_item` — look up item, validate, set pending transaction with quoted price
+- Added `_complete_transaction` — executes on "yes": checks gold/inventory, transfers item and gold, clears pending
+- Shop is triggered inside `handle_npc_convo` when the NPC has a `shop` key: "buy" / "for sale" → list; "buy <item>" → quote + confirm; "sell" → buy menu; "sell <item>" → quote + confirm
+- Saying anything other than yes/no while a transaction is pending reminds the player to confirm or cancel
+- Moving rooms clears both `talking_to` and `pending_transaction`
+- Equipped items cannot be sold (must unequip first)
+- Items with no price (price = 0) are refused by the NPC

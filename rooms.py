@@ -1,3 +1,24 @@
+'''
+
+Rooms and their properties are defined here. Each room is a dictionary with the following keys:
+- "name": The name of the room.
+- "desc": A description of the room.
+- "exits": A dictionary mapping exit names to the keys of the rooms they lead to. Use Cardinal directions (n, s, e, w, u, d) for standard exits. Use any other string for special exits.
+- "npcs": A list of NPC names present in the room.
+- "items": A list of item names present in the room (optional).
+- "mobs": A list of mob names present in the room (optional).
+- "features" : A list of special features in the room such as fishing holes and ores to mine  (optional).
+- "shop" : A boolean indicating if the room is a shop and a list of items that can be bought and sold in the room (optional).
+- "guarded" : A list of exits that are guarded by mobs(optional).
+- "hostile" : A boolean indicating if the mobs in the room are hostile to the player (optional).
+- "locked" : A list with a boolean indicating if the room is locked and requires a key to enter and a string of the name of the item/key needed to open. (optional).
+- "states" : A list of states that the room can be in such as on fire or full of smoke. Each state is a dictionary with the following keys:
+    - "name": The name of the state.
+    - "desc": A description of the room in that state.
+    - "modifiers": A dictionary of modifiers that affect the room's properties in that state (optional).
+
+'''
+
 room_dict = {
 
     "menu" : {
@@ -11,21 +32,23 @@ room_dict = {
         "name" : "Front Administration Lobby",
         "desc" : "A large open room with brick walls, a skylight, and a reception desk.",
         "exits" : {
-            "n" : "driveway",
-            "s" : "back admin"
+            "s" : "driveway",
+            "n" : "back admin"
             },
         "npcs" : ["Kristi"],
-        "items" : ["leather", "short sword", "health potion"]
+        "items" : ["leather", "short sword", "health potion"],
+        "features" : ["respawn point"],
     },
 
     "driveway" : {
         "name" : "Front Administration Driveway",
         "desc" : "A gosse sits in a an oversized planter box. It hisses at you and you feel like you shouldn't be there.",
         "exits" : {
-            "s" : "front admin",
+            "n" : "front admin",
             "portal": "bus hall"},
         "npcs" : ["Goose"],
-        "mobs" : ["goblin"]
+        "mobs" : ["goblin"],
+        "features" : ["fishing hole"],
     },
     
     'back admin' : {
@@ -34,6 +57,7 @@ room_dict = {
         'npcs' : ['Miss Crestwell'],
         'exits' : {
             'n':'courtyard',
+            's':'front admin',
             'w':'gym hallway',
             'e':'bus hall',
         },
@@ -43,8 +67,9 @@ room_dict = {
         'name' : 'Bus Hall',
         'desc' : 'A hallway to the cafeteria filled with suitcases and bags from all the students, there is a door at the end of the hallway to the cafeteria.',
         'exits' : {
-            's':'cafeteria',
+            'n':'cafeteria',
             'w':'back admin',
+            # 'e':'Bus Parking Lot',  # This exit is commented out, possibly for future use
         },
         'npcs' : []
     },
@@ -69,7 +94,8 @@ room_dict = {
             's':'music wing',
             'n':'gym hallway',
         },
-        'npcs' : []
+        'npcs' : [],
+
     },
 
     'campus corner':{
@@ -77,8 +103,8 @@ room_dict = {
         'desc':'A small store selling all sorts of snacks and drinks. Miss Cass works behind the counter',
         'exits':{
             'e':'student centre',
-        },
-        'npcs' : []
+            },
+        'npcs' : ['Miss Cass'],
     },
     
     "o and m room" : {

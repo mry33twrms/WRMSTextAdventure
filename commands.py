@@ -1,9 +1,10 @@
 import asyncio
+import random
 from mobs import mob, mob_dict
 from rooms import room_dict
 from npcs import npc_dict
 from weapons import weapon_dict
-from equipment import equipment_lookup, consumables_dict
+from equipment import equipment_lookup, consumables_dict, materials_dict
 import game_state
 
 DIR_ALIASES = {
@@ -21,6 +22,11 @@ OPPOSITE_DIR = {
     "w": "east", "u": "below", "d": "above",
 }
 
+DIRECTIONS = set(DIR_NAMES)  # {"n", "s", "e", "w", "u", "d"}
+
+GREETINGS = {"hi", "hello", "greetings", "hey", "howdy"}
+FAREWELLS  = {"bye", "goodbye", "farewell", "cya", "later"}
+
 
 def _item_info(item_key):
     """Return the info dict for an item key across all lookup dicts, or None."""
@@ -30,6 +36,8 @@ def _item_info(item_key):
         return equipment_lookup[item_key]
     if item_key in consumables_dict:
         return consumables_dict[item_key]
+    if item_key in materials_dict:
+        return materials_dict[item_key]
     return None
 
 def _item_display_name(item_key):
@@ -82,6 +90,228 @@ def _find_mob(query, mob_list):
     return matches[0] if len(matches) == 1 else None
 
 
+def _find_special_exit(query, room_name):
+    """Fuzzy-match a query against non-directional exit names in a room.
+
+    Returns the exit key string, or None if nothing matched (or ambiguous).
+    """
+    exits = room_dict[room_name].get("exits", {})
+    specials = [k for k in exits if k not in DIRECTIONS]
+    q = query.casefold().strip()
+    # Exact match
+    if q in specials:
+        return q
+    # Partial match
+    matches = [k for k in specials if q in k]
+    return matches[0] if len(matches) == 1 else None
+
+
+def tier_weight(tier):
+    """Higher tiers are exponentially rarer. Tier 1 = 1.0, tier 2 = 0.5, tier 3 = 0.25, etc."""
+    return 1 / (2 ** (tier - 1))
+
+
+def _item_tier(item_key):
+    """Return the tier of an item key, defaulting to 1 if not set."""
+    for lookup in (weapon_dict, equipment_lookup, consumables_dict, materials_dict):
+        if item_key in lookup and "tier" in lookup[item_key]:
+            return lookup[item_key]["tier"]
+    return 1
+
+
+def choose_loot(mob_name):
+    """Roll loot_chance first; if it passes, pick one item weighted by tier. Returns None on no drop."""
+    info = mob_dict[mob_name]
+    if random.random() > info.get("loot_chance", 1.0):
+        return None
+    loot = info.get("loot", [])
+    if not loot:
+        return None
+    weights = [tier_weight(_item_tier(item_key)) for item_key in loot]
+    return random.choices(loot, weights=weights, k=1)[0]
+
+
+def _conversable_npc(room_name):
+    """Return the key of the first NPC in the room that has a convos dict, or None."""
+    for npc_key in room_dict[room_name].get("npcs", []):
+        if "convos" in npc_dict.get(npc_key, {}):
+            return npc_key
+    return None
+
+
+async def _run_convo_action(player, entry):
+    """Execute the action attached to a convo entry dict."""
+    action = entry.get("action")
+    if action == "transport":
+        cost = entry.get("cost", 0)
+        if cost and player.gold < cost:
+            await player.send(f"You need {cost} gold for that.")
+            return
+        if cost:
+            player.gold -= cost
+            await player.send(entry.get("cost_msg", f"You hand over {cost} gold."))
+        dest = entry.get("destination")
+        if dest and dest in room_dict:
+            player.talking_to = None
+            player.current_room = dest
+            await display_room(dest, player)
+
+
+def _sell_price(item_key, shop):
+    """Return the gold an NPC will pay for an item (buy_dict price, or 50% of base)."""
+    if item_key in shop.get("buy_dict", {}):
+        return shop["buy_dict"][item_key]
+    info = _item_info(item_key)
+    if info and "price" in info:
+        return max(1, info["price"] // 2)
+    return 0
+
+
+async def _shop_list_sell(player, npc_name, shop):
+    sell_dict = shop.get("sell_dict", {})
+    if not sell_dict:
+        await player.send(f"{npc_name}: I don't have anything for sale right now.")
+        return
+    lines = [f"{npc_name} sells:"]
+    for key, price in sell_dict.items():
+        lines.append(f"  {_item_display_name(key)} - {price} gold")
+    lines.append("Say 'buy <item>' to purchase.")
+    await player.send("\n".join(lines))
+
+
+async def _shop_list_buy(player, npc_name, shop):
+    buy_dict = shop.get("buy_dict", {})
+    lines = [f"{npc_name} will buy most items at half their value."]
+    if buy_dict:
+        lines.append("Set prices for:")
+        for key, price in buy_dict.items():
+            lines.append(f"  {_item_display_name(key)} - {price} gold")
+    lines.append("Say 'sell <item>' to sell something from your inventory.")
+    await player.send("\n".join(lines))
+
+
+async def _shop_buy_item(player, npc_name, shop, item_query):
+    sell_dict = shop.get("sell_dict", {})
+    if not sell_dict:
+        await player.send(f"{npc_name}: I don't have anything for sale.")
+        return
+    item_key, err = _find_item(item_query, list(sell_dict.keys()))
+    if err:
+        await player.send(f"{npc_name}: {err}")
+        return
+    if item_key is None:
+        await player.send(f"{npc_name}: I'm afraid I don't carry '{item_query}'.")
+        return
+    price = sell_dict[item_key]
+    name = _item_display_name(item_key)
+    player.pending_transaction = {"type": "buy", "item_key": item_key, "price": price}
+    await player.send(f"{npc_name}: That'll be {price} gold for the {name}. Say 'yes' to buy or 'no' to cancel.")
+
+
+async def _shop_sell_item(player, npc_name, shop, item_query):
+    item_key, err = _find_item(item_query, player.inventory)
+    if err:
+        await player.send(f"{npc_name}: {err}")
+        return
+    if item_key is None:
+        await player.send(f"{npc_name}: You don't seem to have that.")
+        return
+    if item_key in player.equipped_items.values():
+        await player.send(f"{npc_name}: You'll need to unequip the {_item_display_name(item_key)} before selling it.")
+        return
+    price = _sell_price(item_key, shop)
+    if price == 0:
+        await player.send(f"{npc_name}: Sorry, I'm not interested in that.")
+        return
+    name = _item_display_name(item_key)
+    player.pending_transaction = {"type": "sell", "item_key": item_key, "price": price}
+    await player.send(f"{npc_name}: I'll give you {price} gold for your {name}. Say 'yes' to sell or 'no' to cancel.")
+
+
+async def _complete_transaction(player, npc_name, pt):
+    if pt["type"] == "buy":
+        if player.gold < pt["price"]:
+            await player.send(f"{npc_name}: You only have {player.gold} gold — you need {pt['price']} gold for that.")
+        elif len(player.inventory) >= player.max_inventory:
+            await player.send(f"{npc_name}: Your pack is full! Make some room first.")
+        else:
+            player.gold -= pt["price"]
+            player.inventory.append(pt["item_key"])
+            name = _item_display_name(pt["item_key"])
+            await player.send(f"{npc_name}: Enjoy your {name}! (Gold: {player.gold})")
+    elif pt["type"] == "sell":
+        if pt["item_key"] not in player.inventory:
+            await player.send(f"{npc_name}: It looks like you no longer have that.")
+        else:
+            player.inventory.remove(pt["item_key"])
+            player.gold += pt["price"]
+            name = _item_display_name(pt["item_key"])
+            await player.send(f"{npc_name}: Pleasure doing business! (Gold: {player.gold})")
+    player.pending_transaction = None
+
+
+async def handle_npc_convo(player, text, npc_key):
+    """Parse player text against an NPC's convo keywords and respond."""
+    npc = npc_dict[npc_key]
+    convos = npc.get("convos", {})
+    npc_name = npc["name"]
+    shop = npc.get("shop")
+    lower_text = text.casefold()
+    words = lower_text.split()
+
+    # Pending transaction: yes / no / remind
+    if player.pending_transaction:
+        if any(w in {"yes", "yeah", "yep"} for w in words):
+            await _complete_transaction(player, npc_name, player.pending_transaction)
+        elif any(w in {"no", "nope", "cancel"} for w in words):
+            player.pending_transaction = None
+            await player.send(f"{npc_name}: No problem, just let me know if you change your mind!")
+        else:
+            await player.send(f"{npc_name}: Say 'yes' to confirm or 'no' to cancel.")
+        return
+
+    # Farewell ends the conversation
+    if any(w in FAREWELLS for w in words):
+        player.talking_to = None
+        entry = convos.get("farewell", "Goodbye!")
+        resp = entry["text"] if isinstance(entry, dict) else entry
+        await player.send(f"{npc_name}: {resp}")
+        return
+
+    # Shop interactions (only if NPC has a shop)
+    if shop:
+        idx = lower_text.find("buy ")
+        if idx != -1:
+            await _shop_buy_item(player, npc_name, shop, lower_text[idx + 4:].strip())
+            return
+
+        idx = lower_text.find("sell ")
+        if idx != -1:
+            await _shop_sell_item(player, npc_name, shop, lower_text[idx + 5:].strip())
+            return
+
+        if "buy" in words or "for sale" in lower_text or "what do you have" in lower_text:
+            await _shop_list_sell(player, npc_name, shop)
+            return
+
+        if "sell" in words:
+            await _shop_list_buy(player, npc_name, shop)
+            return
+
+    # Normal keyword matching
+    matched_key = next(
+        (key for key in convos
+         if key not in ("greeting", "farewell", "default") and key in lower_text),
+        None
+    )
+    entry = convos.get(matched_key) if matched_key else convos.get("default", "...")
+    resp = entry["text"] if isinstance(entry, dict) else entry
+    await player.send(f"{npc_name}: {resp}")
+
+    if isinstance(entry, dict) and "action" in entry:
+        await _run_convo_action(player, entry)
+
+
 async def broadcast_room(room_name, msg, exclude=None):
     for p in game_state.players.values():
         if p.current_room == room_name and p is not exclude:
@@ -120,15 +350,13 @@ async def display_room(room_name, player):
         lines.extend(visible)
         lines.append("")
 
-    exits = []
-    for ex in room.get("exits", {}):
-        if ex in DIR_NAMES:
-            exits.append(DIR_NAMES[ex].capitalize())
-        elif ex != "start":
-            exits.append(ex)
+    cardinal = [DIR_NAMES[ex].capitalize() for ex in room.get("exits", {}) if ex in DIR_NAMES]
+    special  = [ex.capitalize()           for ex in room.get("exits", {}) if ex not in DIRECTIONS]
 
-    if exits:
-        lines.append("Exits: " + ", ".join(exits))
+    if cardinal:
+        lines.append("Exits: " + ", ".join(cardinal))
+    if special:
+        lines.append("Special exits: " + ", ".join(special))
 
     await player.send("\n".join(lines))
 
@@ -163,14 +391,54 @@ async def cmd_help(player, _args, _gs):
     await player.send("\n".join(lines))
 
 
-async def cmd_start(player, _args, gs):
-    await cmd_move(player, "start", gs)
+async def cmd_go(player, args, gs):
+    if not args:
+        exits = room_dict[player.current_room].get("exits", {})
+        specials = [k for k in exits if k not in DIRECTIONS]
+        if specials:
+            await player.send("Go where? Special exits here: " + ", ".join(specials))
+        else:
+            await player.send("There are no special exits here. Use n/s/e/w/u/d to move.")
+        return
+    exit_key = _find_special_exit(args, player.current_room)
+    if exit_key is None:
+        await player.send(f"No special exit matching '{args}' here.")
+        return
+    await cmd_move(player, exit_key, gs)
 
 
 async def cmd_say(player, args, _gs):
     if not args:
         await player.send("Say what?")
         return
+
+    words = args.casefold().split()
+
+    # Mid-conversation: route through NPC convo handler
+    if player.talking_to:
+        await player.send(f'You say: "{args}"')
+        await broadcast_room(player.current_room, f'{player.name} says: "{args}"', exclude=player)
+        if player.talking_to in room_dict[player.current_room].get("npcs", []):
+            await handle_npc_convo(player, args, player.talking_to)
+        else:
+            player.talking_to = None
+            await player.send("They don't seem to be here anymore.")
+        return
+
+    # Greeting in a room with a conversable NPC → initiate conversation
+    if any(w in GREETINGS for w in words):
+        npc_key = _conversable_npc(player.current_room)
+        if npc_key:
+            player.talking_to = npc_key
+            npc_name = npc_dict[npc_key]["name"]
+            greeting = npc_dict[npc_key]["convos"].get("greeting", "Hello.")
+            await player.send(f'You say: "{args}"')
+            await broadcast_room(player.current_room, f'{player.name} says: "{args}"', exclude=player)
+            resp = greeting["text"] if isinstance(greeting, dict) else greeting
+            await player.send(f"{npc_name}: {resp}")
+            return
+
+    # Normal say
     await player.send(f'You say: "{args}"')
     await broadcast_room(player.current_room, f'{player.name} says: "{args}"', exclude=player)
 
@@ -232,6 +500,8 @@ async def cmd_move(player, direction, gs):
         return
 
     old_room = player.current_room
+    player.talking_to = None
+    player.pending_transaction = None
 
     if direction in DIR_NAMES:
         await broadcast_room(old_room, f"{player.name} leaves to the {DIR_NAMES[direction]}.", exclude=player)
@@ -268,15 +538,21 @@ async def cmd_attack(player, args, _gs):
 
     if died:
         live_mobs.remove(target)
-        gold = mob_dict.get(args, {}).get("gold", 0)
+        mob_key = target.name
+        mob_info = mob_dict[mob_key]
+        gold = mob_info.get("gold", 0)
         player.gold += gold
-        defeat_msg = f"You defeated the {target.name}!"
+        defeat_msg = f"You defeated the {mob_info['name']}!"
         if gold:
             defeat_msg += f" You find {gold} gold."
+        loot_key = choose_loot(mob_key)
+        if loot_key:
+            room_dict[room_name].setdefault("items", []).append(loot_key)
+            defeat_msg += f" The {mob_info['name']} drops {_item_display_name(loot_key)}."
         await player.send(defeat_msg)
-        await broadcast_room(room_name, f"The {target.name} has been defeated by {player.name}!", exclude=player)
-        respawn_time = mob_dict[args].get("respawn_time", 60)
-        asyncio.create_task(_respawn_mob(room_name, args, respawn_time))
+        await broadcast_room(room_name, f"The {mob_info['name']} has been defeated by {player.name}!", exclude=player)
+        respawn_time = mob_info.get("respawn_time", 60)
+        asyncio.create_task(_respawn_mob(room_name, mob_key, respawn_time))
     else:
         mob_damage = target.deal_damage()
         player.hp -= mob_damage
@@ -425,7 +701,8 @@ commands_dict = {
     "l":           {"func": cmd_look,        "desc": "Alias for look."},
     "say":         {"func": cmd_say,         "desc": "Say something to everyone in the room."},
     "who":         {"func": cmd_who,         "desc": "List all connected players."},
-    "start":       {"func": cmd_start,       "desc": "Start the game from the main menu."},
+    "go":          {"func": cmd_go,           "desc": "Use a special exit: go <exit name>"},
+    "enter":       {"func": cmd_go,           "desc": "Alias for go."},
     "list rooms":  {"func": cmd_list_rooms,  "desc": "List all rooms in the game."},
     "change room": {"func": cmd_change_room, "desc": "Teleport to a room: change room <name>"},
     "bonk":        {"func": cmd_bonk,        "desc": "Bonk a mob: bonk <mob name>"},
@@ -476,6 +753,12 @@ async def handle_command(raw_input, player, gs):
 
     if best_key is not None:
         await commands_dict[best_key]["func"](player, best_args, gs)
+        return
+
+    # Allow typing a special exit name directly (e.g. "portal", "start")
+    exit_key = _find_special_exit(lower, player.current_room)
+    if exit_key is not None:
+        await cmd_move(player, exit_key, gs)
         return
 
     await player.send("Invalid input. Type 'help' for a command list.")

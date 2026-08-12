@@ -4,6 +4,8 @@ class Player:
         self.current_room = current_room
         self.writer = writer
         self.quitting = False
+        self.talking_to = None
+        self.pending_transaction = None
         self.attack = attack
         self.hp = hp
         self.gold = gold
@@ -16,6 +18,7 @@ class Player:
             "body": None,
             "legs": None,
             "feet": None,
+            "gloves": None,
             "weapon": None,
             "shield": None,
             "accessory": None,
