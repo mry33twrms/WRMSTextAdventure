@@ -5,6 +5,8 @@ from rooms import room_dict
 from npcs import npc_dict
 from weapons import weapon_dict
 from equipment import equipment_lookup, consumables_dict, materials_dict
+from room_features import features_dict
+from config import XP_BASE, XP_EXPONENT
 import game_state
 
 DIR_ALIASES = {
@@ -358,6 +360,14 @@ async def display_room(room_name, player):
     if special:
         lines.append("Special exits: " + ", ".join(special))
 
+    room_features = [
+        features_dict[f]["name"]
+        for f in room.get("features", [])
+        if f in features_dict
+    ]
+    if room_features:
+        lines.append("Features: " + ", ".join(room_features))
+
     await player.send("\n".join(lines))
 
 
@@ -518,6 +528,81 @@ async def _respawn_mob(room_name, mob_key, delay):
     await broadcast_room(room_name, f"A {info['name']} has appeared!")
 
 
+async def player_death(player, room_name, cause=None):
+    """Restore HP, clear state, broadcast defeat, and teleport to respawn point."""
+    player.hp = player.max_hp
+    player.talking_to = None
+    player.pending_transaction = None
+    cause_str = f" by the {cause}" if cause else ""
+    await broadcast_room(room_name, f"{player.name} was defeated{cause_str}!", exclude=player)
+    player.current_room = player.respawn_point
+    respawn_name = room_dict[player.respawn_point]["name"]
+    await player.send(f"You have been defeated{cause_str} and wake up at the {respawn_name}.")
+    await display_room(player.respawn_point, player)
+
+
+def _xp_to_next_level(level):
+    return int(XP_BASE * level ** XP_EXPONENT)
+
+
+async def gain_xp(player, amount):
+    if amount <= 0:
+        return
+    player.xp += amount
+    await player.send(f"You gain {amount} XP. ({player.xp}/{_xp_to_next_level(player.level)})")
+    while player.xp >= _xp_to_next_level(player.level):
+        player.xp -= _xp_to_next_level(player.level)
+        player.level += 1
+        player.stat_points += 1
+        player.recalculate_stats()
+        await player.send(
+            f"*** Level up! You are now level {player.level}. "
+            f"You have {player.stat_points} unspent stat point(s). "
+            f"Use 'character <stat>' to assign them. ***"
+        )
+
+
+STAT_NAMES = {"strength", "agility", "intelligence", "vitality"}
+
+
+async def cmd_character(player, args, _gs):
+    if not args:
+        nxt = _xp_to_next_level(player.level)
+        lines = [
+            f"--- {player.name} ---",
+            f"Level: {player.level}  XP: {player.xp}/{nxt}  Unspent points: {player.stat_points}",
+            "",
+            "Primary Stats:",
+            f"  Strength:     {player.strength}  (ATK +{player.strength}, Crit Power +{player.strength}%)",
+            f"  Agility:      {player.agility}  (Evasion +{player.agility}%, Crit Chance +{player.agility}%)",
+            f"  Intelligence: {player.intelligence}  (Magic DMG +{player.intelligence}, Magic Res +{player.intelligence * 3})",
+            f"  Vitality:     {player.vitality}  (Max HP +{player.vitality * 5})",
+            "",
+            "Derived Stats:",
+            f"  HP: {player.hp}/{player.max_hp}  ATK: {player.attack}  DEF: {player.defense}",
+            f"  Crit Chance: {player.crit_chance}%  Crit Power: {player.crit_power}%  Evasion: {player.evasion}%",
+            f"  Magic DMG: {player.magic_damage}  Magic Resist: {player.magic_resist}",
+            f"  Fire Resist: {player.fire_resist}  Ice Resist: {player.ice_resist}  Shock Resist: {player.shock_resist}",
+        ]
+        if player.stat_points:
+            lines.append("")
+            lines.append("Type 'character <stat>' to spend a point (e.g. 'character strength').")
+        await player.send("\n".join(lines))
+        return
+
+    stat = args.casefold().strip()
+    if stat not in STAT_NAMES:
+        await player.send(f"Unknown stat '{args}'. Choose: strength, agility, intelligence, vitality.")
+        return
+    if player.stat_points <= 0:
+        await player.send("You have no unspent stat points.")
+        return
+    player.stat_points -= 1
+    setattr(player, stat, getattr(player, stat) + 1)
+    player.recalculate_stats()
+    await player.send(f"{stat.capitalize()} is now {getattr(player, stat)}. ({player.stat_points} point(s) remaining)")
+
+
 async def cmd_attack(player, args, _gs):
     if not args:
         await player.send("Usage: attack <mob name>")
@@ -551,6 +636,7 @@ async def cmd_attack(player, args, _gs):
             defeat_msg += f" The {mob_info['name']} drops {_item_display_name(loot_key)}."
         await player.send(defeat_msg)
         await broadcast_room(room_name, f"The {mob_info['name']} has been defeated by {player.name}!", exclude=player)
+        await gain_xp(player, mob_info.get("xp", 0))
         respawn_time = mob_info.get("respawn_time", 60)
         asyncio.create_task(_respawn_mob(room_name, mob_key, respawn_time))
     else:
@@ -558,11 +644,7 @@ async def cmd_attack(player, args, _gs):
         player.hp -= mob_damage
         await player.send(f"The {target.name} hits you for {mob_damage} damage! ({player.hp}/{player.max_hp} HP)")
         if player.hp <= 0:
-            player.hp = player.max_hp
-            player.current_room = "front admin"
-            await player.send("You have been defeated and wake up back at the front lobby.")
-            await broadcast_room(room_name, f"{player.name} was defeated by the {target.name}!", exclude=player)
-            await display_room("front admin", player)
+            await player_death(player, room_name, cause=mob_dict[target.name]["name"])
 
 async def cmd_use(player, args, _gs):
     if not args:
@@ -582,9 +664,12 @@ async def cmd_use(player, args, _gs):
         player.hp += healed
         await player.send(f"You use the {info['name']} and restore {healed} HP. ({player.hp}/{player.max_hp} HP)")
     elif info.get("name") == "Recall Scroll":
-        player.current_room = "front admin"
-        await player.send("The scroll glows and you are whisked back to the lobby.")
-        await display_room("front admin", player)
+        player.talking_to = None
+        player.pending_transaction = None
+        player.current_room = player.respawn_point
+        respawn_name = room_dict[player.respawn_point]["name"]
+        await player.send(f"The scroll glows and you are whisked to {respawn_name}.")
+        await display_room(player.respawn_point, player)
     else:
         await player.send(f"You use the {info['name']}. (effect not yet implemented)")
     player.inventory.remove(item_key)
@@ -667,9 +752,10 @@ async def cmd_equip(player, args, _gs):
         return
     player.equipped_items[slot] = item_key
     if "damage" in info:
-        player.attack += info["damage"]
+        player.bonus_attack += info["damage"]
     if "defense" in info:
-        player.defense += info["defense"]
+        player.bonus_defense += info["defense"]
+    player.recalculate_stats()
     await player.send(f"You equip the {info['name']}.  ATK: {player.attack}  DEF: {player.defense}")
 
 
@@ -685,13 +771,24 @@ async def cmd_unequip(player, args, _gs):
         await player.send(f"You don't have '{args}' equipped."); return
     slot = next(s for s, k in player.equipped_items.items() if k == item_key)
     if item_key in weapon_dict:
-        player.attack -= weapon_dict[item_key]["damage"]
+        player.bonus_attack -= weapon_dict[item_key]["damage"]
     elif item_key in equipment_lookup:
         info = equipment_lookup[item_key]
         if "defense" in info:
-            player.defense -= info["defense"]
+            player.bonus_defense -= info["defense"]
     player.equipped_items[slot] = None
+    player.recalculate_stats()
     await player.send(f"You unequip the {_item_display_name(item_key)}.  ATK: {player.attack}  DEF: {player.defense}")
+
+
+async def cmd_set_respawn(player, _args, _gs):
+    features = room_dict[player.current_room].get("features", [])
+    if "respawn point" not in features:
+        await player.send("There is no respawn point here.")
+        return
+    player.respawn_point = player.current_room
+    room_name = room_dict[player.current_room]["name"]
+    await player.send(f"Your respawn point is now set to {room_name}.")
 
 
 commands_dict = {
@@ -715,8 +812,12 @@ commands_dict = {
     "inventory": {"func": cmd_inventory, "desc": "Show your inventory, stats, and equipped items."},
     "inv":       {"func": cmd_inventory, "desc": "Alias for inventory."},
     "i":         {"func": cmd_inventory, "desc": "Alias for inventory."},
-    "equip":     {"func": cmd_equip,     "desc": "Equip an item to its slot: equip <item name>"},
-    "unequip":   {"func": cmd_unequip,   "desc": "Unequip an item: unequip <item name>"},
+    "equip":       {"func": cmd_equip,       "desc": "Equip an item to its slot: equip <item name>"},
+    "unequip":     {"func": cmd_unequip,     "desc": "Unequip an item: unequip <item name>"},
+    "set respawn": {"func": cmd_set_respawn, "desc": "Set your respawn point to the current room (requires a respawn point feature)."},
+    "character":   {"func": cmd_character,   "desc": "View your stats and spend stat points: character [stat]"},
+    "char":        {"func": cmd_character,   "desc": "Alias for character."},
+    "c":           {"func": cmd_character,   "desc": "Alias for character."},
     "n":  {"func": lambda p, a, gs: cmd_move(p, "n", gs),  "desc": "Move north."},
     "s":  {"func": lambda p, a, gs: cmd_move(p, "s", gs),  "desc": "Move south."},
     "e":  {"func": lambda p, a, gs: cmd_move(p, "e", gs),  "desc": "Move east."},

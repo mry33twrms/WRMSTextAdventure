@@ -3,7 +3,7 @@ from player import Player
 import game_state
 from commands import handle_command, display_room
 
-VERSION = "0.08"
+VERSION = "0.10"
 HOST = "0.0.0.0"
 PORT = 4000
 
@@ -34,7 +34,7 @@ async def handle_client(reader, writer):
         writer.close()
         return
 
-    player = Player(name, "menu", writer,attack=5, hp=20, gold=0, inventory=[], max_inventory=10, max_hp=20, defense=0)
+    player = Player(name, "menu", writer, gold=0, inventory=[], max_inventory=10)
     game_state.players[name] = player
     await player.send(f"WRMS MUD v{VERSION}")
 

@@ -30,6 +30,17 @@ DONE - mobs drop loot
 
 DONE - loot table system
 
+- Critical hit system
+
+- use armor in attack system calculations
+
+- Dodging system
+
+- Magical items and damage types
+
+- buffs pool on items
+
+
 - hostile mob system. Upon entering player will be warned that one mob is about to attack, giving them a chance to retreat.
 
 - a property for rooms called guarded allowing a list of exits to be blocked until a mob is defeated.
@@ -42,12 +53,17 @@ DONE - a shop system where users can see items, prices and buy and sell
 
 - features for rooms that enable the use of items such as water to fish in, ores to mine, and trees to gather food. These features have limited uses that respawn over time.
 
+DONE - Character menu to display stats
+
+DONE - Level system allowing players to improve stats when leveling up
+
 DONE - A NPC conversation system that allows users to type keywords that lead to dialogue. Keywords may trigger the next steps in quests or result in the exchange of items.
 
 - WHEN STABLE:
     - Add database to implement account creation, saving, logging in and out.
     - Leaderboards for kills, gold, and other milestones
     - Account types such as player, mod, admin that give different permissions. Mods and Admins can teleport, create monsters and items.
+    - Log system for chat, player movements, items created/destroyed. 
 
 
 

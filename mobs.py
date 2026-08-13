@@ -22,6 +22,7 @@ mob_dict = {
         "attack": 4,
         "weakness": "Fire",
         "gold": 5,
+        "xp": 10,
         "respawn_time": 60,
         "loot_chance": 0.5,
         "loot": ["leather", "cloth pants", "cloth shirt", "cloth shoes", "cloth gloves", "apple", "bread"]
@@ -33,6 +34,7 @@ mob_dict = {
         "attack": 10,
         "weakness": "Fire",
         "gold": 15,
+        "xp": 30,
         "respawn_time": 60,
         "loot_chance": 0.5,
         "loot": ["leather", "cloth pants", "cloth shirt", "cloth shoes", "cloth gloves", "apple", "bread"]
@@ -44,6 +46,7 @@ mob_dict = {
         "attack": 6,
         "weakness": "Blunt Weapons",
         "gold": 10,
+        "xp": 20,
         "respawn_time": 60,
         "loot_chance": 0.5,
         "loot": ["leather", "cloth pants", "cloth shirt", "cloth shoes", "cloth gloves", "apple", "bread"]
@@ -52,10 +55,11 @@ mob_dict = {
     "orc guard": {
         "name" : "Orc Guard",
         "desc": "A brute-like orc with a shield.",
-        "hp": 10,
-        "attack": 5,
+        "hp": 25,
+        "attack": 7,
         "weakness": "Very Stupid",
-        "gold": 3,
+        "gold": 10,
+        "xp": 20,
         "respawn_time": 60,
         "loot_chance": 0.5,
         "loot": ["leather", "cloth pants", "cloth shirt", "cloth shoes", "cloth gloves", "apple", "bread"]

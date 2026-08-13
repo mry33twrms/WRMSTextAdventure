@@ -111,3 +111,29 @@
 - Moving rooms clears both `talking_to` and `pending_transaction`
 - Equipped items cannot be sold (must unequip first)
 - Items with no price (price = 0) are refused by the NPC
+
+---
+
+## v0.10 — Stats, Leveling & Character Menu
+
+- Added `config.py` — all gameplay-tuning constants: stat scaling (`DAMAGE_PER_STR`, `CRIT_POWER_PER_STR`, `EVASION_PER_AGI`, `CRIT_CHANCE_PER_AGI`, `MAGIC_DAMAGE_PER_INT`, `MAGIC_RESIST_PER_INT`, `HP_PER_VIT`), base stats (`BASE_HP`, `BASE_ATTACK`), and XP curve params (`XP_BASE`, `XP_EXPONENT`)
+- Rewrote `player.py`: primary stats (strength, agility, intelligence, vitality) start at `STARTING_STAT`; all derived stats computed by `recalculate_stats()`; added `level`, `xp`, `stat_points`; added elemental resistances (`fire_resist`, `ice_resist`, `shock_resist`); constructor no longer takes `attack`/`hp`/`max_hp`/`defense` params
+- Added `_xp_to_next_level(level)` — exponential XP curve: `int(XP_BASE * level ** XP_EXPONENT)`
+- Added `gain_xp(player, amount)` — accumulates XP, handles level-up loop, awards 1 stat point per level, calls `recalculate_stats()`
+- Added `cmd_character` (`character` / `char` / `c`): no args shows full stat sheet (primary stats, derived stats, elemental resists, XP progress); with stat name arg spends one unspent stat point on that stat
+- `cmd_attack` defeat block now calls `await gain_xp(player, mob_info.get("xp", 0))`
+- Fixed `cmd_equip`: now applies item bonuses via `player.bonus_attack`/`bonus_defense` + `recalculate_stats()` instead of direct `player.attack` mutation
+- Fixed `cmd_unequip`: same fix — reverses via `bonus_attack`/`bonus_defense` + `recalculate_stats()`; unequipping no longer permanently alters base attack
+- Added `xp` field to all mob_dict entries (goblin 10, troll 30, skeleton 20, orc guard 8)
+
+---
+
+## v0.09 — Room Features & Respawn System
+- Added `room_features.py` — `features_dict` defining interactive room elements (respawn point, fishing hole, ore vein, herb patch), each with action, success rate, reward, and cooldown fields ready for future implementation
+- Imported `features_dict` into `commands.py`; `display_room` now appends a "Features:" line listing any features present in the room
+- Added `player.respawn_point` (default `"front admin"`) — already set by user in `player.py`
+- Added `player_death(player, room_name, cause=None)` — centralised death handler: restores HP, clears `talking_to` and `pending_transaction`, broadcasts defeat to room, teleports to `player.respawn_point`, displays new room
+- `cmd_attack` death block replaced with single `await player_death(...)` call
+- Added `cmd_set_respawn` — sets `player.respawn_point` to current room only if it has a `"respawn point"` feature; fails gracefully otherwise
+- Added `"set respawn"` to `commands_dict`
+- Fixed `cmd_use` recall scroll: now uses `player.respawn_point` (was hardcoded), clears `talking_to`/`pending_transaction` before teleporting, and uses the room's display name in the message
