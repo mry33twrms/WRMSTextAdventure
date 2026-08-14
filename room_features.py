@@ -58,3 +58,9 @@ async def cmd_harvest(player, _args, _gs):
     # Placeholder for gathering plants command implementation
     pass
 
+async def cmd_drink(player, _args, _gs):
+    # Placeholder for drinking from fountains
+    pass
+
+
+

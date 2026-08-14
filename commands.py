@@ -324,7 +324,7 @@ def _get_room_mobs(room_name):
     """Return the live mob list for a room, initialising it from room_dict if needed."""
     if room_name not in game_state.room_mobs:
         game_state.room_mobs[room_name] = [
-            mob(key, mob_dict[key]["hp"], mob_dict[key]["attack"])
+            mob(key, mob_dict[key])
             for key in room_dict[room_name].get("mobs", [])
             if key in mob_dict
         ]
@@ -523,9 +523,21 @@ async def cmd_move(player, direction, gs):
 async def _respawn_mob(room_name, mob_key, delay):
     await asyncio.sleep(delay)
     info = mob_dict[mob_key]
-    new_mob = mob(mob_key, info["hp"], info["attack"])
+    new_mob = mob(mob_key, info)
     game_state.room_mobs.setdefault(room_name, []).append(new_mob)
     await broadcast_room(room_name, f"A {info['name']} has appeared!")
+
+
+def _do_combat_hit(attacker_attack, attacker_crit_chance, attacker_crit_power,
+                   target_evasion, target_defense):
+    """Return (damage, evaded, is_crit). damage=0 when evaded."""
+    if random.randint(1, 100) <= target_evasion:
+        return 0, True, False
+    damage = max(1, attacker_attack - target_defense)
+    is_crit = random.randint(1, 100) <= attacker_crit_chance
+    if is_crit:
+        damage = int(damage * (1 + attacker_crit_power / 100))
+    return damage, False, is_crit
 
 
 async def player_death(player, room_name, cause=None):
@@ -609,42 +621,75 @@ async def cmd_attack(player, args, _gs):
         return
 
     room_name = player.current_room
-    live_mobs = _get_room_mobs(room_name)
+    lower_args = args.casefold()
 
+    # Friendly fire: NPCs
+    for npc_key in room_dict[room_name].get("npcs", []):
+        npc = npc_dict[npc_key]
+        if lower_args in npc_key.casefold() or lower_args in npc["name"].casefold():
+            await player.send(f"You can't attack {npc['name']}. They're on your side!")
+            return
+
+    # Friendly fire: other players
+    for p in game_state.players.values():
+        if p is not player and p.current_room == room_name and lower_args in p.name.casefold():
+            await player.send(f"You can't attack {p.name}. They're on your side!")
+            return
+
+    live_mobs = _get_room_mobs(room_name)
     target = _find_mob(args, live_mobs)
     if target is None:
         await player.send(f"There is no '{args}' here to attack.")
         return
 
-    damage = player.attack
-    died = target.take_damage(damage)
-    await player.send(f"You attack the {target.name} for {damage} damage! ({target.hp} HP remaining)")
-    await broadcast_room(room_name, f"{player.name} attacks the {target.name}!", exclude=player)
+    mob_info = mob_dict[target.name]
+    mob_display = mob_info["name"]
 
-    if died:
-        live_mobs.remove(target)
-        mob_key = target.name
-        mob_info = mob_dict[mob_key]
-        gold = mob_info.get("gold", 0)
-        player.gold += gold
-        defeat_msg = f"You defeated the {mob_info['name']}!"
-        if gold:
-            defeat_msg += f" You find {gold} gold."
-        loot_key = choose_loot(mob_key)
-        if loot_key:
-            room_dict[room_name].setdefault("items", []).append(loot_key)
-            defeat_msg += f" The {mob_info['name']} drops {_item_display_name(loot_key)}."
-        await player.send(defeat_msg)
-        await broadcast_room(room_name, f"The {mob_info['name']} has been defeated by {player.name}!", exclude=player)
-        await gain_xp(player, mob_info.get("xp", 0))
-        respawn_time = mob_info.get("respawn_time", 60)
-        asyncio.create_task(_respawn_mob(room_name, mob_key, respawn_time))
+    # Player attacks mob
+    damage, evaded, is_crit = _do_combat_hit(
+        player.attack, player.crit_chance, player.crit_power,
+        target.evasion, target.defense,
+    )
+    if evaded:
+        await player.send(f"You swing at the {mob_display} but they dodge!")
+        await broadcast_room(room_name, f"{player.name} swings at the {mob_display} but misses!", exclude=player)
     else:
-        mob_damage = target.deal_damage()
+        died = target.take_damage(damage)
+        crit_str = " Critical hit!" if is_crit else ""
+        await player.send(f"You attack the {mob_display} for {damage} damage!{crit_str} ({target.hp}/{target.max_hp} HP)")
+        await broadcast_room(room_name, f"{player.name} attacks the {mob_display}!", exclude=player)
+
+        if died:
+            live_mobs.remove(target)
+            gold = mob_info.get("gold", 0)
+            player.gold += gold
+            defeat_msg = f"You defeated the {mob_display}!"
+            if gold:
+                defeat_msg += f" You find {gold} gold."
+            loot_key = choose_loot(target.name)
+            if loot_key:
+                room_dict[room_name].setdefault("items", []).append(loot_key)
+                defeat_msg += f" The {mob_display} drops {_item_display_name(loot_key)}."
+            await player.send(defeat_msg)
+            await broadcast_room(room_name, f"The {mob_display} has been defeated by {player.name}!", exclude=player)
+            await gain_xp(player, mob_info.get("xp", 0))
+            respawn_time = mob_info.get("respawn_time", 60)
+            asyncio.create_task(_respawn_mob(room_name, target.name, respawn_time))
+            return
+
+    # Mob counterattacks (whether player hit or missed)
+    mob_damage, mob_evaded, mob_crit = _do_combat_hit(
+        target.attack, target.crit_chance, target.crit_power,
+        player.evasion, player.defense,
+    )
+    if mob_evaded:
+        await player.send(f"The {mob_display} swings at you but you dodge!")
+    else:
+        crit_str = " Critical hit!" if mob_crit else ""
         player.hp -= mob_damage
-        await player.send(f"The {target.name} hits you for {mob_damage} damage! ({player.hp}/{player.max_hp} HP)")
+        await player.send(f"The {mob_display} hits you for {mob_damage} damage!{crit_str} ({player.hp}/{player.max_hp} HP)")
         if player.hp <= 0:
-            await player_death(player, room_name, cause=mob_dict[target.name]["name"])
+            await player_death(player, room_name, cause=mob_display)
 
 async def cmd_use(player, args, _gs):
     if not args:
@@ -703,7 +748,8 @@ async def cmd_drop(player, args, _gs):
         await player.send(err); return
     if item_key is None:
         await player.send(f"You don't have '{args}'."); return
-    if item_key in player.equipped_items.values():
+    equipped_count = sum(1 for k in player.equipped_items.values() if k == item_key)
+    if equipped_count >= player.inventory.count(item_key):
         await player.send(f"Unequip '{_item_display_name(item_key)}' before dropping it.")
         return
     player.inventory.remove(item_key)
@@ -714,15 +760,18 @@ async def cmd_drop(player, args, _gs):
 
 
 async def cmd_inventory(player, _args, _gs):
-    equipped_keys = {k for k in player.equipped_items.values() if k}
+    # Build a copy of inventory, then remove one occurrence per equipped slot so
+    # duplicates (e.g. two leather armors when one is equipped) are shown correctly.
+    remaining = list(player.inventory)
     lines = [f"Inventory ({len(player.inventory)}/{player.max_inventory}):"]
     for slot, key in player.equipped_items.items():
         if key:
             lines.append(f"  [{slot}] {_item_display_name(key)} (equipped)")
-    for key in player.inventory:
-        if key not in equipped_keys:
-            lines.append(f"  {_item_display_name(key)}")
-    if not player.inventory and not equipped_keys:
+            if key in remaining:
+                remaining.remove(key)
+    for key in remaining:
+        lines.append(f"  {_item_display_name(key)}")
+    if not player.inventory and not any(player.equipped_items.values()):
         lines.append("  (empty)")
     lines.append(f"Gold: {player.gold}  HP: {player.hp}/{player.max_hp}  ATK: {player.attack}  DEF: {player.defense}")
     await player.send("\n".join(lines))

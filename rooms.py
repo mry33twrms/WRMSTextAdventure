@@ -23,26 +23,99 @@ room_dict = {
 
     "menu" : {
         "name" : "Main Menu",
-        "desc" : "Welcome to the WRMS Text Adventure!\nType 'Start' to continue\n\nType 'help' for command list",
+        "desc" : "Welcome to the WRMS Text Adventure!\nType 'Start' to continue\n\nType 'help' for command list\nPlease be respectful of your fellow players.\n We hope you have fun!",
         "exits" : {'start' : 'front admin'},
         "npcs" : []
     },
 
     "front admin" : {
         "name" : "Front Administration Lobby",
-        "desc" : "A large open room with brick walls, a skylight, and a reception desk.",
+        "desc" : "A large open room with brick walls, a skylight, and a reception desk. Mementos and historical pieces line the walls, and wooden display cases. A bust of W. Ross Macdonald himself.",
         "exits" : {
             "s" : "driveway",
-            "n" : "back admin"
+            "n" : "mail room",
+            "w" : "west admin",
+            "e" : "east admin",
             },
         "npcs" : ["Kristi"],
         "items" : ["leather", "short sword", "health potion"],
         "features" : ["respawn point"],
     },
 
+    "west admin" : {
+        "name" : "West Admin Offices",
+        "desc" : "A carpeted room that branches off to offices and meeting rooms. The walls are lined with art and filing cabinets.",
+        "exits" : {
+            "n" : "vp office",
+            "s" : "principals office",
+            "w" : "meeting room",
+            "e" : "front admin"
+        },
+        "npcs" : ["Cindi"],
+    },
+
+        "principals office" : {
+        "name" : "Principal Maggiacomo's Office",
+        "desc" : "Two patterned sofas sit with a coffee table between them. The table is full of books about the school. Behind a large meeting table sits a large desk.",
+        "exits" : {
+            "n" : "west admin",
+        },
+        "npcs" : ["mr maggiacomo"],
+    },
+        
+        
+    "vp office" : {
+        "name" : "Vice Princiapl Mrs. Ossysui's Office",
+        "desc" : "Student art lines the walls, surrounding a desk with photos of Mrs. O's family. A random ammo can is placed on the window sill.",
+        "exits" : {
+            "s" : "west admin"
+        },
+        "npcs" : ["mrs ossysui"],
+    },
+
+    "meeting room" : {
+        "name" : "Admin Meeting Room",
+        "desc" : "The room has a large wooden table surrounded by chairs. Two black television screens are mounted on the far wall.",
+        "exits" : {
+            "e" : "west admin"
+        },
+        "npcs" : [],
+    },
+        
+
+    
+    "east admin" : {
+        "name" : "East Admin Offices",
+        "desc" : "A carpeted room with mail boxes and office equipment. The staff here handle finances and human resources.",
+        "exits" : {
+            "w" : "front admin"
+        },
+        "npcs" : ["gabby"],
+    },
+    
+    "mail room" : {
+        "name" : "Mid Admin and Mail Room",
+        "desc" : "Mailboxes line one wall with names of staff on them. A large vault door hides secrets. Newspaper articles of student achievements line the brick walls.",
+        "exits" : {
+            "s" : "front admin",
+            "n" : "back admin",
+            "e" : "staff lounge"
+        },
+        "npcs" : [],
+    },
+
+    "staff lounge" : {
+        "name" : "Staff Lounge",
+        "desc" : "Ancient couches surround a table filled with decade old magazines. A tired fridge hums in the corner.",
+        "exits" : {
+            "w" : "mail room"
+        },
+        "npcs" : ["Ken"],
+    },
+
     "driveway" : {
         "name" : "Front Administration Driveway",
-        "desc" : "A gosse sits in a an oversized planter box. It hisses at you and you feel like you shouldn't be there.",
+        "desc" : "A goose sits in a an oversized planter box. It hisses at you and you feel like you shouldn't be there.",
         "exits" : {
             "n" : "front admin",
             "portal": "bus hall"},
@@ -57,7 +130,7 @@ room_dict = {
         'npcs' : ['Miss Crestwell'],
         'exits' : {
             'n':'courtyard',
-            's':'front admin',
+            's':'mail room',
             'w':'gym hallway',
             'e':'bus hall',
         },
@@ -69,7 +142,29 @@ room_dict = {
         'exits' : {
             'n':'cafeteria',
             'w':'back admin',
-            # 'e':'Bus Parking Lot',  # This exit is commented out, possibly for future use
+            'e':'bus driveway',
+        },
+        'npcs' : []
+    },
+
+    'courtyard':{
+        'name' : 'Courtyard',
+        'desc' : "A large bell is mounted on a concrete pedestal in the center of a large open outdoor space. The school buildings surround the space. There's something magical about this bell.",
+        'exits' : {
+            's':'back admin',
+            'w':'main school stairs',
+            'n':'playground',
+            'e':'cafeteria entrance',
+        },
+        'npcs' : [],
+        'features': 'respawn point'
+    },
+
+    'bus driveway':{
+        'name' : 'Bus Driveway',
+        'desc' : 'A large parking lot with many white vans parked in rows.',
+        'exits' : {
+            'w':'bus hall',
         },
         'npcs' : []
     },
@@ -170,5 +265,6 @@ room_dict = {
         },
         'npcs' : []
     },
+
 
 }
