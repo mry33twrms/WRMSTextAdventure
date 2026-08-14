@@ -114,6 +114,14 @@
 
 ---
 
+## v0.11 — Global Broadcast & Input Protection
+
+- Added `cmd_broadcast` — sends a `[Broadcast]` message to every connected player; optional first numeric argument schedules it with `asyncio.create_task` + `asyncio.sleep`; immediate broadcasts also reach the sender
+- Added `"broadcast"` to `commands_dict`
+- Rewrote `client.py` — switches stdin to raw mode (`tty.setraw`) so input is read character-by-character via a daemon thread feeding an asyncio queue; on any server message the current input line is cleared (`\r\033[K`), the message is printed, and the prompt + partial input are restored; backspace, Ctrl+C, Ctrl+D, and arrow-key escape sequences handled cleanly
+
+---
+
 ## v0.10 — Stats, Leveling & Character Menu
 
 - Added `config.py` — all gameplay-tuning constants: stat scaling (`DAMAGE_PER_STR`, `CRIT_POWER_PER_STR`, `EVASION_PER_AGI`, `CRIT_CHANCE_PER_AGI`, `MAGIC_DAMAGE_PER_INT`, `MAGIC_RESIST_PER_INT`, `HP_PER_VIT`), base stats (`BASE_HP`, `BASE_ATTACK`), and XP curve params (`XP_BASE`, `XP_EXPONENT`)

@@ -1,5 +1,9 @@
 import asyncio
+import os
 import sys
+import termios
+import threading
+import tty
 
 HOST = "127.0.0.1"
 PORT = 4000
@@ -14,40 +18,108 @@ async def main():
         return
 
     loop = asyncio.get_event_loop()
-    stdin_reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin
-    )
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
 
-    async def recv():
+    pending_input = ""   # characters the user has typed but not yet sent
+    current_prompt = ""  # the prompt string currently shown (e.g. ">> ")
+    char_queue: asyncio.Queue[bytes] = asyncio.Queue()
+
+    def read_stdin():
+        """Blocking stdin reader in a daemon thread; feeds bytes to char_queue."""
         while True:
-            data = await reader.read(4096)
-            if not data:
-                print("\n[Disconnected from server]")
-                return
-            print(data.decode(errors="replace"), end="", flush=True)
+            try:
+                ch = os.read(fd, 1)
+                if not ch:
+                    break
+                loop.call_soon_threadsafe(char_queue.put_nowait, ch)
+            except OSError:
+                break
 
-    async def send():
-        while True:
-            line = await stdin_reader.readline()
-            if not line:
-                return
-            writer.write(line)
-            await writer.drain()
-
-    recv_task = asyncio.create_task(recv())
-    send_task = asyncio.create_task(send())
-
-    done, pending = await asyncio.wait(
-        [recv_task, send_task], return_when=asyncio.FIRST_COMPLETED
-    )
-    for task in pending:
-        task.cancel()
     try:
-        writer.close()
-        await writer.wait_closed()
-    except OSError:
-        pass
+        tty.setraw(fd)
+        threading.Thread(target=read_stdin, daemon=True).start()
+
+        async def recv():
+            nonlocal pending_input, current_prompt
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    sys.stdout.write('\r\n[Disconnected from server]\r\n')
+                    sys.stdout.flush()
+                    return
+
+                msg = data.decode(errors="replace")
+
+                # If the server's data ends with the prompt, strip it so we
+                # control where it appears (avoids double-printing on restore).
+                if msg.endswith(">> "):
+                    msg = msg[:-3]
+                    current_prompt = ">> "
+
+                # Raw mode needs explicit \r before every \n.
+                msg = msg.replace('\r\n', '\n').replace('\n', '\r\n')
+
+                # Clear whatever is on the current input line, print the
+                # server message, then restore the prompt + pending input.
+                sys.stdout.write('\r\033[K')
+                sys.stdout.write(msg)
+                sys.stdout.write(current_prompt + pending_input)
+                sys.stdout.flush()
+
+        async def send():
+            nonlocal pending_input, current_prompt
+            while True:
+                raw = await char_queue.get()
+                char = raw.decode('ascii', errors='replace')
+
+                if char in ('\r', '\n'):
+                    line = pending_input
+                    pending_input = ""
+                    current_prompt = ""
+                    sys.stdout.write('\r\n')
+                    sys.stdout.flush()
+                    writer.write((line + '\n').encode())
+                    await writer.drain()
+
+                elif char in ('\x7f', '\x08'):  # backspace / delete
+                    if pending_input:
+                        pending_input = pending_input[:-1]
+                        sys.stdout.write('\b \b')
+                        sys.stdout.flush()
+
+                elif char == '\x03':  # Ctrl+C
+                    raise KeyboardInterrupt
+
+                elif char == '\x04':  # Ctrl+D
+                    return
+
+                elif char == '\x1b':  # escape sequence (arrow keys, etc.) — eat next 2 bytes
+                    await char_queue.get()
+                    await char_queue.get()
+
+                elif char.isprintable():
+                    pending_input += char
+                    sys.stdout.write(char)
+                    sys.stdout.flush()
+
+        recv_task = asyncio.create_task(recv())
+        send_task = asyncio.create_task(send())
+
+        done, pending_tasks = await asyncio.wait(
+            [recv_task, send_task], return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending_tasks:
+            task.cancel()
+
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except OSError:
+            pass
+        sys.stdout.write('\r\n')
 
 
 if __name__ == "__main__":

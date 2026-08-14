@@ -3,7 +3,7 @@ from player import Player
 import game_state
 from commands import handle_command, display_room
 
-VERSION = "0.10"
+VERSION = "0.11"
 HOST = "0.0.0.0"
 PORT = 4000
 

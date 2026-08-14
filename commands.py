@@ -830,6 +830,39 @@ async def cmd_unequip(player, args, _gs):
     await player.send(f"You unequip the {_item_display_name(item_key)}.  ATK: {player.attack}  DEF: {player.defense}")
 
 
+async def cmd_broadcast(player, args, _gs):
+    if not args:
+        await player.send("Usage: broadcast [delay_seconds] <message>")
+        return
+
+    parts = args.split(None, 1)
+    delay = 0
+    message = args
+
+    try:
+        delay = float(parts[0])
+        if len(parts) < 2 or not parts[1].strip():
+            await player.send("Usage: broadcast [delay_seconds] <message>")
+            return
+        message = parts[1].strip()
+    except ValueError:
+        delay = 0
+        message = args
+
+    async def _send():
+        if delay > 0:
+            await asyncio.sleep(delay)
+        full_msg = f"[Broadcast] {message}"
+        for p in list(game_state.players.values()):
+            await p.send(full_msg)
+
+    if delay > 0:
+        asyncio.create_task(_send())
+        await player.send(f"Broadcast scheduled in {delay:g} second(s): {message}")
+    else:
+        await _send()
+
+
 async def cmd_set_respawn(player, _args, _gs):
     features = room_dict[player.current_room].get("features", [])
     if "respawn point" not in features:
@@ -863,6 +896,7 @@ commands_dict = {
     "i":         {"func": cmd_inventory, "desc": "Alias for inventory."},
     "equip":       {"func": cmd_equip,       "desc": "Equip an item to its slot: equip <item name>"},
     "unequip":     {"func": cmd_unequip,     "desc": "Unequip an item: unequip <item name>"},
+    "broadcast":   {"func": cmd_broadcast,   "desc": "Send a message to all players: broadcast [delay_seconds] <message>"},
     "set respawn": {"func": cmd_set_respawn, "desc": "Set your respawn point to the current room (requires a respawn point feature)."},
     "character":   {"func": cmd_character,   "desc": "View your stats and spend stat points: character [stat]"},
     "char":        {"func": cmd_character,   "desc": "Alias for character."},
@@ -899,7 +933,7 @@ async def handle_command(raw_input, player, gs):
         elif lower.startswith(cmd_key + " "):
             if best_key is None or len(cmd_key) > len(best_key):
                 best_key = cmd_key
-                best_args = lower[len(cmd_key):].strip()
+                best_args = text[len(cmd_key):].strip()
 
     if best_key is not None:
         await commands_dict[best_key]["func"](player, best_args, gs)
