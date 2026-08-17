@@ -74,13 +74,14 @@ mob_dict = {
         "strength": 5,
         "agility":  2,
         "vitality": 4,
-        "defense":  3,
+        "defense":  10,
         "weakness": "Very Stupid",
         "gold": 10,
         "xp": 20,
         "respawn_time": 60,
         "loot_chance": 0.5,
         "loot": ["leather", "cloth pants", "cloth shirt", "cloth shoes", "cloth gloves", "apple", "bread"],
+        "hostile": True,
     },
 }
 

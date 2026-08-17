@@ -12,11 +12,15 @@ CRIT_CHANCE_PER_AGI = 1    # crit chance % added per AGI point
 MAGIC_DAMAGE_PER_INT = 1   # magic damage added per INT point
 MAGIC_RESIST_PER_INT = 3   # magic resistance added per INT point
 
+# Intelligence: mana
+MP_PER_INT  = 5            # max MP added per INT point
+
 # Vitality: health
 HP_PER_VIT = 5             # max HP added per VIT point
 
 # Base stats before primary stat contribution
 BASE_HP     = 5
+BASE_MP     = 5
 BASE_ATTACK = 2
 
 # Starting primary stat values for new players

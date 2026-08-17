@@ -3,6 +3,7 @@ from config import (
     EVASION_PER_AGI, CRIT_CHANCE_PER_AGI,
     MAGIC_DAMAGE_PER_INT, MAGIC_RESIST_PER_INT,
     HP_PER_VIT, BASE_HP, BASE_ATTACK,
+    MP_PER_INT, BASE_MP,
     STARTING_STAT, STARTING_LEVEL,
 )
 
@@ -41,6 +42,27 @@ class Player:
         self.ice_resist   = 0
         self.shock_resist = 0
 
+        # Account
+        self.role       = "player"  # "player" | "admin" — set from DB on login
+        self.reset_mode = None      # None | {"target": name, "step": "new"|"confirm", "pending": pw}
+
+        # Party / messaging
+        self.party       = None  # Party object, or None
+        self.last_sender = None  # name of last player who sent a tell
+
+        # Following
+        self.following = None  # name of player being followed, or None
+        self.followers = set() # set of player names following this player
+
+        # Combat state
+        self.in_combat   = False
+        self.combat_room = None
+
+        # Quests
+        self.quests             = {}   # quest_id -> {name, desc, status}
+        self.quest_items        = []   # quest item keys (no inventory slot used)
+        self.received_npc_items = set() # item keys given by NPCs (one-time gifts)
+
         # Respawn
         self.respawn_point = "front admin"
 
@@ -58,13 +80,16 @@ class Player:
         }
 
         # Derive all combat stats from primary stats + bonuses
-        self.hp = 0  # placeholder; recalculate sets max_hp, then we fill hp
+        self.hp = 0  # placeholder; recalculate sets max_hp/max_mp, then we fill
+        self.mp = 0
         self.recalculate_stats()
-        self.hp = self.max_hp  # start at full health
+        self.hp = self.max_hp
+        self.mp = self.max_mp
 
     def recalculate_stats(self):
         """Recompute all derived stats from primary stats and equipment bonuses."""
         self.max_hp      = BASE_HP + self.vitality     * HP_PER_VIT
+        self.max_mp      = BASE_MP + self.intelligence * MP_PER_INT
         self.attack      = BASE_ATTACK + self.strength * DAMAGE_PER_STR + self.bonus_attack
         self.defense     = self.bonus_defense
 
@@ -74,9 +99,11 @@ class Player:
         self.magic_damage = self.intelligence * MAGIC_DAMAGE_PER_INT
         self.magic_resist = self.intelligence * MAGIC_RESIST_PER_INT
 
-        # Clamp current HP to new max (matters when max_hp shrinks from unequip, etc.)
+        # Clamp current HP/MP to new max
         if hasattr(self, "hp"):
             self.hp = min(self.hp, self.max_hp)
+        if hasattr(self, "mp"):
+            self.mp = min(self.mp, self.max_mp)
 
     async def send(self, msg):
         try:

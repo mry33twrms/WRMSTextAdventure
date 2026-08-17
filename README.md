@@ -38,25 +38,27 @@ DONE - Level system allowing players to improve stats when leveling up
 
 DONE - A NPC conversation system that allows users to type keywords that lead to dialogue. Keywords may trigger the next steps in quests or result in the exchange of items.
 
-- Add checks to the attack command to check if the player is trying to target an NPC or another player. Respond with, "You can't attack <target>. They're on your side."
+DONE - Add checks to the attack command to check if the player is trying to target an NPC or another player. Respond with, "You can't attack <target>. They're on your side."
 
 - Make a toggleable mode to reduce text. If a user has been to a room before, the description won't be displayed upon entry. The look command will always show the full description.
 
 - Short and Full descriptions
 
-- Description keywords for things like signs
+DONE - Description keywords for things like signs
 
-- Critical hit system
+DONE - Critical hit system
 
-- use armor in attack system calculations
+DONE - use armor in attack system calculations
 
-- Dodging/Evasion system
+DONE - Dodging/Evasion system
+
+DONE - Party & Follow system
 
 - Magical items and damage types
 
 - buff pool on items
 
-- hostile mob system. Upon entering player will be warned that one mob is about to attack, giving them a chance to retreat.
+DONE - hostile mob system. Upon entering player will be warned that one mob is about to attack, giving them a chance to retreat.
 
 - a property for rooms called guarded allowing a list of exits to be blocked until a mob is defeated.
 
@@ -71,11 +73,11 @@ DONE - A NPC conversation system that allows users to type keywords that lead to
 - special combat items such as throwables. eg: Goalball
 
 - WHEN STABLE:
-    - Add database to implement account creation, saving, logging in and out.
+    - Add database to implement account creation, saving, logging in and out. -sqllite
     - Leaderboards for kills, gold, and other milestones
     - Awards for playing seasons & school years
     - Account types such as player, mod, admin that give different permissions. Mods and Admins can teleport, create monsters and items.
-    - Log system for chat, player movements, items created/destroyed. 
+    - Log system for chat, player movements, items created/destroyed.  -MONGODB?
 
 
 

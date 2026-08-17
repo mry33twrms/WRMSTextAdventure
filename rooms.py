@@ -16,6 +16,7 @@ Rooms and their properties are defined here. Each room is a dictionary with the 
     - "name": The name of the state.
     - "desc": A description of the room in that state.
     - "modifiers": A dictionary of modifiers that affect the room's properties in that state (optional).
+- "mob_respawn_enabled": A boolean indicating if mobs in the room should respawn after being defeated (optional).
 
 '''
 
@@ -52,6 +53,8 @@ room_dict = {
             "e" : "front admin"
         },
         "npcs" : ["Cindi"],
+        "items" : ["plate", "great sword", "health potion"],
+        "locked" : "s", "requires_key" : "principal key",
     },
 
         "principals office" : {
@@ -134,6 +137,7 @@ room_dict = {
             'w':'gym hallway',
             'e':'bus hall',
         },
+        "items" : ["plate", "health potion", "great sword", "principal key"],
     },
     
     'bus hall':{
@@ -144,7 +148,9 @@ room_dict = {
             'w':'back admin',
             'e':'bus driveway',
         },
-        'npcs' : []
+        'mobs' : ["orc guard"],
+        "hostile": True,
+        "guarded": ["e"],
     },
 
     'courtyard':{
@@ -157,7 +163,18 @@ room_dict = {
             'e':'cafeteria entrance',
         },
         'npcs' : [],
-        'features': 'respawn point'
+        'features': 'respawn point',
+        'keywords': {
+            'bell': "The bell is mounted on a concrete pedestal in the center of the courtyard. Something about it feels magical — maybe you should ring it.",
+            'ring bell': {
+                "text":           "You ring the bell. It resonates with a deep, magical tone. A folded piece of paper flutters down from the bell tower — it's the missing homework!",
+                "action":         "give_quest_item",
+                "item_key":       "missing homework",
+                "requires_quest": "missing_homework",
+                "no_quest_text":  "You ring the bell. It resonates with a deep tone, but nothing seems to happen.",
+                "already_text":   "You already retrieved the homework from here. Bring it back to Kristi!",
+            },
+        }
     },
 
     'bus driveway':{

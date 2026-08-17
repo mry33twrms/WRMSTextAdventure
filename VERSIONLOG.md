@@ -2,6 +2,114 @@
 
 ---
 
+## v0.18 — SQLite Accounts & World Persistence
+
+### Account system (`database.py`)
+- SQLite3 database (`wrms.db`) initialised at server start via `db.init_db()`
+- `accounts` table: `name`, `password_hash` (bcrypt), `email`, `role` (`"player"` | `"admin"`), `created_at`, `last_login`
+- `player_data` table: full player state — gold, inventory, equipment, all primary stats, level/xp, HP/MP, room, respawn point, quests, quest items, received NPC items
+- Passwords encrypted with **bcrypt** (`bcrypt.hashpw` / `bcrypt.checkpw`)
+- Case-insensitive account lookup (`COLLATE NOCASE`) preserving original casing
+
+### Login flow (`main.py`)
+- **First run**: if no admin accounts exist, the first connection triggers interactive admin setup (name → password → confirm → email); no further connections can proceed until this completes
+- **Returning account**: prompts for password; up to 3 attempts before disconnect; duplicate login (same account already online) is rejected
+- **New account**: prompts for password (×2 to confirm) and email; account created as `"player"` role
+- Player state is fully loaded from DB after successful login; current room validated against `room_dict` (falls back to `"front admin"` if room was removed)
+- Player state saved to DB on disconnect (in `finally` block, before party/follow cleanup)
+- Admin/player role label broadcast to other players on entry
+
+### Admin commands
+- `change room <name>` — admin only; non-admins get "You don't have permission to use that command."
+- `bonk <mob>` — admin only (same guard)
+- `reset password <account>` — admin only; interactive two-step prompt (new password → confirm) intercepted at the top of `handle_command` via `player.reset_mode` state; minimum 4-character length enforced
+
+### Player changes
+- Added `player.role` (`"player"` | `"admin"`) — set from DB on login
+- Added `player.reset_mode` (None or state dict) — drives interactive password-reset input
+
+---
+
+## v0.17 — Guarded & Locked Exits
+
+- **Guarded exits** (`"guarded": [<direction>, ...]` in room dict): if any live mobs are present, listed exit directions are blocked with "The [mob] blocks your path! Defeat it first." Once all mobs are defeated the exit opens normally. Implemented in `cmd_move` before movement is committed.
+- **Locked exits** (`"locked": <direction>`, `"requires_key": <item_key>` in room dict): the listed exit is locked until a player with the required key item uses it. The key-holder triggers an unlock, broadcasts "X unlocks the door to the [direction]! It will lock again in 10 seconds." Other players in the room can pass freely for that window. After `LOCK_OPEN_DELAY` (10s) the `_relock_exit` task fires, removes the exit from `game_state.unlocked_exits`, and broadcasts "The door to the [direction] locks again with a click."
+- Added `game_state.unlocked_exits` — a `set` of `(room_name, direction)` tuples tracking currently open locked doors
+- Added `LOCK_OPEN_DELAY = 10` constant in commands.py
+- Added `_relock_exit(room_name, direction)` async helper
+- Added `"principal key"` to `equipment.py` `keys_dict`; added `keys_dict` to commands.py import and `_item_info` lookup so key items display names correctly
+- Added `Cindi` NPC stub to `npcs.py` (was referenced in west admin's npcs list but undefined, causing a crash on room display); made `display_room` skip unknown NPC keys instead of raising `KeyError`
+- Added `"principal key"` to back admin's test items so the locked door can be tested
+
+---
+
+## v0.16 — Follow System
+
+- Added `player.following` (name of leader being followed, or None) and `player.followers` (set of follower names)
+- Added `_follow_clear(player)` — removes player from their leader's `followers` set and clears `player.following`
+- Added `_follow_cleanup(player)` — called on disconnect; clears follow state and notifies any followers they've lost their target
+- **`follow <player>`** — start following a player in the same room; sets mutual follow state and notifies both parties
+- **`follow stop`** / **`follow`** (no args) — stop following; notifies player
+- **`cmd_move` follower drag** — when a player moves, all followers in the same room are automatically dragged to the new room (skipped if follower is in combat); broadcasted with "follows … to …" / "arrives following …" messages; hostile encounter checks run per dragged follower
+- **`cmd_move` auto-follow** — when a party member arrives in the party leader's room, they auto-follow the leader; when the leader arrives where members are, those members auto-follow; both parties notified
+- **`cmd_move` follow clear** — moving under your own direction clears your own follow (direction = interrupt)
+- **`cmd_change_room` teleport** — teleporting clears the player's follow and notifies all their followers; followers are not dragged on teleport
+- **`party` status** — room name added to each member line: `[Room Name]`
+- `_follow_cleanup` imported in `main.py` and called in disconnect `finally` block before party cleanup
+
+---
+
+## v0.15 — Party System & Private Messaging
+
+- Added `Party` class (`MAX_SIZE = 4`): tracks `leader` and `members` list; shared by reference across all member players
+- Added `player.party` (Party object or None) and `player.last_sender` (name of last tell sender, for reply)
+- Added `player.mp` / `player.max_mp` and `BASE_MP` / `MP_PER_INT` constants — mana now scales with Intelligence (matching the existing mana potions in the item system); `recalculate_stats` computes and clamps mp alongside hp
+- **`party`** — no args shows party status (name, [Leader] tag, HP, MP per member) or help if not in a party
+- **`party start`** — creates a new party with the player as leader; others join with `party join <player>`
+- **`party join <player>`** — case-insensitive player lookup; validates not already in a party, target has a party, party has room; notifies all existing members
+- **`party leave`** — removes player; if last member disbands, otherwise transfers leadership to next member and notifies remaining members
+- **`party say`** / **`psay`** — sends a `[Party]` prefixed message to all party members
+- **`tell`** / **`msg`** / **`message`** — sends a `[Tell]` private message to a named online player; sets `last_sender` on recipient
+- **`reply`** / **`r`** — replies to the last player who sent you a tell; updates `last_sender` bi-directionally
+- Added `_party_leave_cleanup(player)` helper — shared by `party leave` command and `main.py` disconnect handler so leaving on disconnect notifies remaining members and transfers leadership correctly
+
+---
+
+## v0.14 — Quest System & NPC Item Gifts
+
+- Added `player.quests` — dict of `quest_id → {name, desc, status}` tracking active and completed quests
+- Added `player.quest_items` — separate list for quest items; quest items never consume inventory space
+- Added `player.received_npc_items` — set of item keys gifted by NPCs; used to enforce one-time gifts
+- Added `quest_items_dict` to `equipment.py` (already present); imported into `commands.py` so `_item_info` and `_item_display_name` work for quest items
+- **NPC convo actions** — `_run_convo_action` now handles three new action types:
+  - `give_item`: gives a regular item from inventory; `"once": true` + `"once_msg"` enforces one-time gift tracking via `received_npc_items`
+  - `give_quest`: adds a quest to `player.quests`; `"already_given_msg"` fires if quest already active
+  - `complete_quest`: checks `requires_quest_item` in `player.quest_items`, removes it, gives `reward_item`, marks quest completed
+- `handle_npc_convo` pre-checks action conditions before sending NPC text so `once_msg`, `already_given_msg`, `no_quest_msg`, and `no_item_msg` short-circuit correctly
+- **Room keywords** — `_find_room_keyword(query, room_name)` does exact then substring match against `room["keywords"]` dict; `_handle_keyword_action` dispatches plain string (description) or action dict
+  - `give_quest_item` action: checks `requires_quest` on player, guards against duplicate pickup with `already_text`, gives quest item and broadcasts `[Quest Item obtained]`
+- `handle_command` now checks room keywords after special exits, before "Invalid input"
+- **`cmd_quests`** — lists active quests with description and completed quests with `(done)` label; aliased as both `quests` and `quest`
+- `cmd_inventory` shows quest items in a separate "Quest Items (no slot used):" section with `[Quest Item]` label
+- Updated Kristi NPC: `help` gives a one-time health potion; `quest` starts the Missing Homework quest; `homework` completes it (requires quest item) and rewards an apple
+- Updated courtyard `ring bell` keyword to action dict: gives `missing homework` quest item if quest is active, shows neutral flavour text otherwise, and guards against re-pickup
+- Fixed `cmd_change_room` not clearing `talking_to` / `pending_transaction` on teleport (mirroring `cmd_move`)
+
+---
+
+## v0.13 — Combat Robustness: Periodic Check & Mid-Combat Entry
+
+- Added `_hostile_check_loop()` — background task started at server boot (every 3 s); scans all visited rooms for hostile mobs + present players with no active combat session and triggers a new `CombatSession` + warning; catches any room-entry path not handled by `cmd_move` or `cmd_change_room` (recall scrolls, future teleport commands, etc.)
+- Added `_warn_and_join(player, session)` — personal 5-second warning for players who enter a room while combat is already underway; player can move back out during the countdown; if still present when it expires they are added to the active session
+- Added `CombatSession.pending_join` set — tracks player names with an active `_warn_and_join` task to prevent double-warnings from both the entry path and the periodic loop
+- `_trigger_hostile_warning` now marks all players present at the start of the countdown in `pending_join` so the check loop does not issue a redundant personal warning for them
+- `_exit_combat` now also removes the player from `session.pending_join` so a fleeing player is not auto-joined when their countdown expires
+- Added hostile-encounter check to `cmd_change_room` (was only in `cmd_move`); both paths now issue the same warning/join logic
+- `_hostile_check_loop` also sweeps active combat sessions each tick and issues `_warn_and_join` for any players in the room who are not yet in combat (handles players who arrived via paths that bypass both `cmd_move` and `cmd_change_room`)
+- New mobs appearing in a room with an active session (respawns, future summons) are automatically included in the next round via `_execute_round`'s dynamic `_get_room_mobs()` call — no extra tracking needed
+
+---
+
 ## v0.01 — MUD Conversion
 - Rewrote single-player loop as asyncio TCP server (`main.py`)
 - Added `game_state.py` — shared `players` dict for live world state
@@ -111,6 +219,21 @@
 - Moving rooms clears both `talking_to` and `pending_transaction`
 - Equipped items cannot be sold (must unequip first)
 - Items with no price (price = 0) are refused by the NPC
+
+---
+
+## v0.12 — Round-Based Combat System
+
+- Added `CombatSession` class tracking players, per-player damage dealt, gold pool, taunt state, and cooldowns
+- Added `combat_sessions` dict to `game_state`; added `in_combat` and `combat_room` fields to `Player`
+- **Hostile flag**: rooms (`room_dict`) and mobs (`mob_dict`) can have `"hostile": True`; entering a hostile room with live mobs triggers a 5-second warning broadcast then starts combat automatically; hostile mob respawn near players also triggers the warning
+- **Round loop** (`_run_combat_loop` / `_execute_round`): every 4 seconds all participants act in descending agility order — players auto-attack a random mob, mobs attack the taunted player or a random player
+- **Gold distribution**: gold from defeated mobs pools during combat; on victory it is distributed proportionally to damage dealt
+- **XP** awarded to the player who lands the killing blow
+- `cmd_attack` now starts or joins a `CombatSession` rather than resolving a single hit; players cannot move normally while in combat
+- Added `cmd_flee` / `run`: flee success chance = `player.agility / (player.agility + max_mob_agility)`; failure deals a free punishment hit; success randomly moves the player to an adjacent room
+- Added `cmd_taunt`: directs all mobs to attack the taunting player for one round; 2-round cooldown tracked per-player in the session
+- `player_death` now removes the player from their combat session before teleporting
 
 ---
 

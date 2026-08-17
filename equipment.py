@@ -26,14 +26,6 @@ armor_dict = {
         "tier": 2
     },
 
-    "cloth" : {
-        "name" : "Cloth Armor",
-        "desc" : "Lightweight cloth armor for minimal protection.",
-        "defense" : 2,
-        "price" : 10,
-        "tier": 2
-    },
-
     "cloth shirt" : {
         "name" : "Cloth Shirt",
         "desc" : "A simple cloth shirt. Barely any protection.",
@@ -382,6 +374,48 @@ materials_dict = {
     },
 }
 
+quest_items_dict = {
+    "ancient artifact" : {
+        "name" : "Ancient Artifact",
+        "desc" : "A mysterious artifact from an ancient civilization.",
+        "price" : 100,
+        "tier": 3
+    },
+    "magic crystal" : {
+        "name" : "Magic Crystal",
+        "desc" : "A crystal imbued with magical energy.",
+        "price" : 150,
+        "tier": 3
+    },
+    "rare gem" : {
+        "name" : "Rare Gem",
+        "desc" : "A rare and valuable gemstone.",
+        "price" : 200,
+        "tier": 3
+    },
+    "missing homework" : {
+        "name" : "Missing Homework",
+        "desc" : "A piece of homework that was lost. It looks important.",
+        "price" : 0,
+        "tier": 1
+    },
+}
+
+keys_dict = {
+    "office key" : {
+        "name" : "Office Key",
+        "desc" : "A key that opens the principal's office door.",
+        "price" : 0,
+        "tier": 1
+    },
+    "principal key" : {
+        "name" : "Principal's Key",
+        "desc" : "A heavy brass key embossed with the school crest. It unlocks the principal's private office.",
+        "price" : 0,
+        "tier": 1
+    },
+}
+
 # Combined lookup for all equippable items — maps item key -> info dict with "slot" added.
 equipment_lookup = (
     {k: {**v, "slot": "body"}   for k, v in armor_dict.items()} |
@@ -390,4 +424,5 @@ equipment_lookup = (
     {k: {**v, "slot": "feet"}   for k, v in boots_dict.items()} |
     {k: {**v, "slot": "gloves"} for k, v in gloves_dict.items()} |
     {k: {**v, "slot": "tool"}   for k, v in tools_dict.items()}
+    
 )
