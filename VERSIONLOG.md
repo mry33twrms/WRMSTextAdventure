@@ -2,6 +2,29 @@
 
 ---
 
+## v0.19 — Equip Fixes, Password Masking & Admin Create
+
+### Bug fixes
+- **`KeyError: 'weapon'` crash on equip**: new accounts had `equipped_items` saved as `{}` in the DB default; on load the dict was empty, so `player.equipped_items["weapon"]` crashed. Fixed by merging loaded data with the full default slot structure in `_load_player_from_db`.
+- **Equip did not remove item from inventory**: `cmd_equip` set the slot but left the item in `player.inventory`. Fixed — item is now removed on equip.
+- **Unequip did not return item to inventory**: `cmd_unequip` cleared the slot but discarded the item. Fixed — item is now appended back to inventory.
+- **Inventory display hid second copy of equipped item**: `cmd_inventory` was written for the old system where equipped items stayed in inventory and one copy was subtracted from the display. Now that equip removes the item, the subtraction was consuming a legitimately separate item. Fixed — equipped items are displayed above the inventory list with no subtraction logic.
+- **Legacy save normalization**: accounts saved before the equip fix may have an item duplicated in both `equipped_items` and `inventory`. On load, any equipped item found in `inventory` is now removed to normalize the state.
+
+### Password masking (client + server)
+- Defined `PWD_SIGNAL = "\x1bPWD"` in `config.py` — a byte sequence prepended by the server to any password prompt
+- `_prompt()` in `main.py` accepts `password=True`; all login and account-creation password prompts tagged
+- Password reset prompts in `commands.py` (`cmd_reset_password`, `_handle_reset_input`) also tagged
+- `client.py` detects `\x1bPWD` in received data, strips it before display, sets `password_mode = True`; subsequent keystrokes echo `*` until Enter is pressed, which resets the mode
+
+### Admin `create` command
+- **`create <item name>`** — admin-only; spawns any item by its key name directly into the admin's inventory; unknown item names give a clear error; non-admins are denied
+
+### Admin `tpto` fix
+- Player lookup was case-sensitive (`game_state.players.get(args)`); `tpto dean` would fail if the account was stored as `Dean`. Fixed to use case-insensitive search matching all other commands. Added self-teleport guard ("You're already there.").
+
+---
+
 ## v0.18 — SQLite Accounts & World Persistence
 
 ### Account system (`database.py`)

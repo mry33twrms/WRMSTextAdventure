@@ -7,7 +7,7 @@ from commands import handle_command, display_room, _hostile_check_loop, _party_l
 from rooms import room_dict
 from config import PWD_SIGNAL
 
-VERSION = "0.18"
+VERSION = "0.19"
 HOST = "0.0.0.0"
 PORT = 4000
 
