@@ -8,6 +8,8 @@ import tty
 HOST = "127.0.0.1"
 PORT = 4000
 
+PWD_SIGNAL = b"\x1bPWD"   # server sends this to activate star-masking for next input
+
 
 async def main():
     try:
@@ -21,8 +23,9 @@ async def main():
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
 
-    pending_input = ""   # characters the user has typed but not yet sent
-    current_prompt = ""  # the prompt string currently shown (e.g. ">> ")
+    pending_input = ""    # characters the user has typed but not yet sent
+    current_prompt = ""   # the prompt string currently shown (e.g. ">> ")
+    password_mode  = False  # when True, echo * instead of actual characters
     char_queue: asyncio.Queue[bytes] = asyncio.Queue()
 
     def read_stdin():
@@ -41,13 +44,18 @@ async def main():
         threading.Thread(target=read_stdin, daemon=True).start()
 
         async def recv():
-            nonlocal pending_input, current_prompt
+            nonlocal pending_input, current_prompt, password_mode
             while True:
                 data = await reader.read(4096)
                 if not data:
                     sys.stdout.write('\r\n[Disconnected from server]\r\n')
                     sys.stdout.flush()
                     return
+
+                # Detect password-mode signal and strip it before display
+                if PWD_SIGNAL in data:
+                    data = data.replace(PWD_SIGNAL, b"")
+                    password_mode = True
 
                 msg = data.decode(errors="replace")
 
@@ -60,15 +68,16 @@ async def main():
                 # Raw mode needs explicit \r before every \n.
                 msg = msg.replace('\r\n', '\n').replace('\n', '\r\n')
 
-                # Clear whatever is on the current input line, print the
-                # server message, then restore the prompt + pending input.
+                # Clear the current input line, print the server message,
+                # then restore the prompt + pending input (masked if needed).
+                masked = '*' * len(pending_input) if password_mode else pending_input
                 sys.stdout.write('\r\033[K')
                 sys.stdout.write(msg)
-                sys.stdout.write(current_prompt + pending_input)
+                sys.stdout.write(current_prompt + masked)
                 sys.stdout.flush()
 
         async def send():
-            nonlocal pending_input, current_prompt
+            nonlocal pending_input, current_prompt, password_mode
             while True:
                 raw = await char_queue.get()
                 char = raw.decode('ascii', errors='replace')
@@ -77,6 +86,7 @@ async def main():
                     line = pending_input
                     pending_input = ""
                     current_prompt = ""
+                    password_mode = False   # always clear after Enter
                     sys.stdout.write('\r\n')
                     sys.stdout.flush()
                     writer.write((line + '\n').encode())
@@ -100,7 +110,7 @@ async def main():
 
                 elif char.isprintable():
                     pending_input += char
-                    sys.stdout.write(char)
+                    sys.stdout.write('*' if password_mode else char)
                     sys.stdout.flush()
 
         recv_task = asyncio.create_task(recv())

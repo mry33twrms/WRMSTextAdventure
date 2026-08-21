@@ -6,7 +6,7 @@ from npcs import npc_dict
 from weapons import weapon_dict
 from equipment import equipment_lookup, consumables_dict, materials_dict, quest_items_dict, keys_dict
 from room_features import features_dict
-from config import XP_BASE, XP_EXPONENT
+from config import XP_BASE, XP_EXPONENT, PWD_SIGNAL
 import game_state
 import database as db
 
@@ -629,6 +629,72 @@ async def cmd_change_room(player, args, gs):
             session = CombatSession(args)
             game_state.combat_sessions[args] = session
             asyncio.create_task(_trigger_hostile_warning(args))
+
+async def cmd_create(player, args, gs):
+    if player.role != "admin":
+        await player.send("You don't have permission to use that command.")
+        return
+    if not args:
+        await player.send("Usage: create <item name>")
+        return
+    item_key = args.casefold().strip()
+    info = _item_info(item_key)
+    if info is None:
+        await player.send(f"Unknown item '{args}'. Check the item name and try again.")
+        return
+    if len(player.inventory) >= player.max_inventory:
+        await player.send("Your inventory is full.")
+        return
+    player.inventory.append(item_key)
+    await player.send(f"[Admin] Created {info['name']} in your inventory.")
+
+
+async def cmd_teleport_to(player, args, gs):
+    if player.role != "admin":
+        await player.send("You don't have permission to use that command.")
+        return
+    if not args:
+        await player.send("Usage: tpto <player name>")
+        return
+    target_player = next(
+        (p for p in game_state.players.values() if p.name.casefold() == args.casefold()),
+        None,
+    )
+    if not target_player:
+        await player.send(f"Player '{args}' is not online.")
+        return
+    if target_player is player:
+        await player.send("You're already there.")
+        return
+    old_room = player.current_room
+    player.talking_to         = None
+    player.pending_transaction = None
+
+    # Teleporting clears follow state — followers are not dragged
+    _follow_clear(player)
+    for follower_name in list(player.followers):
+        follower = game_state.players.get(follower_name)
+        if follower:
+            follower.following = None
+            await follower.send(f"{player.name} teleports away. You are no longer following them.")
+    player.followers.clear()
+
+    await broadcast_room(old_room, f"{player.name} vanishes into thin air.", exclude=player)
+    player.current_room = target_player.current_room
+    await broadcast_room(player.current_room, f"{player.name} appears out of thin air.", exclude=player)
+    await display_room(player.current_room, player)
+    # Hostile encounter check (same as cmd_move)
+    live_mobs = _get_room_mobs(player.current_room)
+    if live_mobs and _is_hostile_encounter(player.current_room):
+        session = game_state.combat_sessions.get(player.current_room)
+        if session:
+            if player.name not in session.pending_join:
+                session.pending_join.add(player.name)
+                asyncio.create_task(_warn_and_join(player, session))
+        else:
+            session = CombatSession(player.current_room)
+            game_state.combat_sessions[player.current_room] = session
+            asyncio.create_task(_trigger_hostile_warning(player.current_room))
 
 
 async def cmd_bonk(player, args, gs):
@@ -1281,16 +1347,11 @@ async def cmd_drop(player, args, _gs):
 
 
 async def cmd_inventory(player, _args, _gs):
-    # Build a copy of inventory, then remove one occurrence per equipped slot so
-    # duplicates (e.g. two leather armors when one is equipped) are shown correctly.
-    remaining = list(player.inventory)
     lines = [f"Inventory ({len(player.inventory)}/{player.max_inventory}):"]
     for slot, key in player.equipped_items.items():
         if key:
             lines.append(f"  [{slot}] {_item_display_name(key)} (equipped)")
-            if key in remaining:
-                remaining.remove(key)
-    for key in remaining:
+    for key in player.inventory:
         lines.append(f"  {_item_display_name(key)}")
     if player.quest_items:
         lines.append("")
@@ -1346,6 +1407,7 @@ async def cmd_equip(player, args, _gs):
         current = _item_display_name(player.equipped_items[slot])
         await player.send(f"You already have {current} in your {slot} slot. Unequip it first.")
         return
+    player.inventory.remove(item_key)
     player.equipped_items[slot] = item_key
     if "damage" in info:
         player.bonus_attack += info["damage"]
@@ -1373,6 +1435,7 @@ async def cmd_unequip(player, args, _gs):
         if "defense" in info:
             player.bonus_defense -= info["defense"]
     player.equipped_items[slot] = None
+    player.inventory.append(item_key)
     player.recalculate_stats()
     await player.send(f"You unequip the {_item_display_name(item_key)}.  ATK: {player.attack}  DEF: {player.defense}")
 
@@ -1702,14 +1765,14 @@ async def _handle_reset_input(player, text):
     mode = player.reset_mode
     if mode["step"] == "new":
         if len(text) < 4:
-            await player.send("Password must be at least 4 characters. New password: ")
+            await player.send(f"{PWD_SIGNAL}Password must be at least 4 characters. New password: ")
             return
         mode["pending"] = text
         mode["step"] = "confirm"
-        await player.send("Confirm new password: ")
+        await player.send(f"{PWD_SIGNAL}Confirm new password: ")
     elif mode["step"] == "confirm":
         if text != mode["pending"]:
-            await player.send("Passwords do not match. Try again. New password: ")
+            await player.send(f"{PWD_SIGNAL}Passwords do not match. Try again. New password: ")
             mode["step"] = "new"
             mode["pending"] = None
         else:
@@ -1731,7 +1794,7 @@ async def cmd_reset_password(player, args, gs):
         await player.send(f"No account named '{target_name}'.")
         return
     player.reset_mode = {"target": canonical, "step": "new", "pending": None}
-    await player.send(f"Resetting password for '{canonical}'. New password: ")
+    await player.send(f"{PWD_SIGNAL}Resetting password for '{canonical}'. New password: ")
 
 
 commands_dict = {
@@ -1776,7 +1839,10 @@ commands_dict = {
     "follow":           {"func": cmd_follow,          "desc": "Follow a player: follow <player> | follow stop"},
     "reset password":   {"func": cmd_reset_password,  "desc": "[Admin] Reset an account password: reset password <name>"},
     "change room":      {"func": cmd_change_room,     "desc": "[Admin] Teleport to a room: change room <name>"},
+    "teleport to":      {"func": cmd_teleport_to,     "desc": "[Admin] Teleport to a player: teleport to <player name>."},
+    "tpto":             {"func": cmd_teleport_to,     "desc": "[Admin] Alias for teleport to a player."},
     "bonk":             {"func": cmd_bonk,            "desc": "[Admin] Remove a mob from the room: bonk <mob name>"},
+    "create":           {"func": cmd_create,          "desc": "[Admin] Spawn an item into your inventory: create <item name>"},
     "n":  {"func": lambda p, a, gs: cmd_move(p, "n", gs),  "desc": "Move north."},
     "s":  {"func": lambda p, a, gs: cmd_move(p, "s", gs),  "desc": "Move south."},
     "e":  {"func": lambda p, a, gs: cmd_move(p, "e", gs),  "desc": "Move east."},

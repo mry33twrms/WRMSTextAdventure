@@ -54,15 +54,21 @@ DONE - Dodging/Evasion system
 
 DONE - Party & Follow system
 
+DONE - Teleport to command for admin.
+
+DONE - Hiding password on client.
+
+Done - Admin command to create items: create <item name>
+
 - Magical items and damage types
 
 - buff pool on items
 
 DONE - hostile mob system. Upon entering player will be warned that one mob is about to attack, giving them a chance to retreat.
 
-- a property for rooms called guarded allowing a list of exits to be blocked until a mob is defeated.
+DONE - a property for rooms called guarded allowing a list of exits to be blocked until a mob is defeated.
 
-- locked doors that require keys to open. The unlock/open should be aliases that tries to use the use command with the key.
+DONE - locked doors that require keys to open. The unlock/open should be aliases that tries to use the use command with the key.
 
 - special states for rooms such as when dark, flooded, on fire, full of smoke
 
@@ -78,6 +84,10 @@ DONE - hostile mob system. Upon entering player will be warned that one mob is a
     - Awards for playing seasons & school years
     - Account types such as player, mod, admin that give different permissions. Mods and Admins can teleport, create monsters and items.
     - Log system for chat, player movements, items created/destroyed.  -MONGODB?
+    - SSH deployment
+    - Auto Backup of database to another server
+    - Randomized instances, parties can fight through till they perish. Roguelike buff elements.
+    - Dueling
 
 
 

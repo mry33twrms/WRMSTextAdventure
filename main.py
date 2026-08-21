@@ -5,6 +5,7 @@ import game_state
 import database as db
 from commands import handle_command, display_room, _hostile_check_loop, _party_leave_cleanup, _follow_cleanup
 from rooms import room_dict
+from config import PWD_SIGNAL
 
 VERSION = "0.18"
 HOST = "0.0.0.0"
@@ -19,9 +20,13 @@ async def _send(writer, msg):
     await writer.drain()
 
 
-async def _prompt(reader, writer, prompt, timeout=LOGIN_TIMEOUT):
-    """Write prompt, return stripped response or None on timeout/disconnect."""
-    writer.write(prompt.encode())
+async def _prompt(reader, writer, prompt, timeout=LOGIN_TIMEOUT, password=False):
+    """Write prompt, return stripped response or None on timeout/disconnect.
+
+    Pass password=True to tell the client to mask input with stars.
+    """
+    prefix = PWD_SIGNAL if password else ""
+    writer.write((prefix + prompt).encode())
     await writer.drain()
     try:
         line = await asyncio.wait_for(reader.readline(), timeout=timeout)
@@ -37,7 +42,12 @@ def _load_player_from_db(player, data):
     """Overwrite a freshly-created Player with saved DB values."""
     player.gold              = data["gold"]
     player.inventory         = json.loads(data["inventory"])
-    player.equipped_items    = json.loads(data["equipped_items"])
+    _DEFAULT_SLOTS = {
+        "head": None, "body": None, "legs": None, "feet": None,
+        "gloves": None, "weapon": None, "shield": None,
+        "accessory": None, "tool": None,
+    }
+    player.equipped_items = {**_DEFAULT_SLOTS, **json.loads(data["equipped_items"])}
     player.strength          = data["strength"]
     player.agility           = data["agility"]
     player.intelligence      = data["intelligence"]
@@ -51,6 +61,11 @@ def _load_player_from_db(player, data):
     player.quests            = json.loads(data["quests"])
     player.quest_items       = json.loads(data["quest_items"])
     player.received_npc_items = set(json.loads(data["received_npc_items"]))
+    # Normalize legacy saves: equipped items must not also sit in inventory
+    for key in player.equipped_items.values():
+        if key and key in player.inventory:
+            player.inventory.remove(key)
+
     player.recalculate_stats()
     saved_hp = data["hp"]
     saved_mp = data["mp"]
@@ -72,10 +87,10 @@ async def _first_run_setup(reader, writer):
         return None
 
     while True:
-        pw = await _prompt(reader, writer, "Admin password: ")
+        pw = await _prompt(reader, writer, "Admin password: ", password=True)
         if pw is None:
             return None
-        confirm = await _prompt(reader, writer, "Confirm password: ")
+        confirm = await _prompt(reader, writer, "Confirm password: ", password=True)
         if confirm is None:
             return None
         if pw != confirm:
@@ -112,7 +127,7 @@ async def _login_flow(reader, writer):
     if canonical:
         # ── Existing account ──────────────────────────────────────────
         for attempt in range(1, MAX_AUTH_TRIES + 1):
-            pw = await _prompt(reader, writer, "Password: ")
+            pw = await _prompt(reader, writer, "Password: ", password=True)
             if pw is None:
                 return None
             if db.verify_password(canonical, pw):
@@ -141,13 +156,13 @@ async def _login_flow(reader, writer):
         await _send(writer, "")
 
         while True:
-            pw = await _prompt(reader, writer, "Create password: ")
+            pw = await _prompt(reader, writer, "Create password: ", password=True)
             if pw is None:
                 return None
             if len(pw) < 4:
                 await _send(writer, "Password must be at least 4 characters.")
                 continue
-            confirm = await _prompt(reader, writer, "Confirm password: ")
+            confirm = await _prompt(reader, writer, "Confirm password: ", password=True)
             if confirm is None:
                 return None
             if pw != confirm:

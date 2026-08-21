@@ -1,3 +1,6 @@
+# Client/server protocol signals
+PWD_SIGNAL = "\x1bPWD"   # prepend to any prompt that should mask input with stars
+
 # Stat scaling constants — edit these to rebalance gameplay
 
 # Strength: damage and crit power
