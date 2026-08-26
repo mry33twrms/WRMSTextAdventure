@@ -1,0 +1,49 @@
+Here's what you'd need to do:
+
+1. Create the Droplet
+
+Ubuntu 22.04 LTS, the cheapest tier ($6/mo) is plenty for a student MUD
+Enable SSH key auth during setup
+2. Open the port
+
+In the DigitalOcean firewall settings, open TCP port 4000 inbound (or whatever port you want to use publicly)
+3. Set up the server
+
+
+# SSH in, then:
+sudo apt update && sudo apt install python3 python3-pip git -y
+pip3 install bcrypt
+git clone <your repo> WRMSTextAdventure
+cd WRMSTextAdventure
+4. Change one line in main.py
+
+Right now client.py connects to 127.0.0.1 — that's fine for the client, but main.py's HOST = "0.0.0.0" already binds to all interfaces, so the server side needs no change.
+
+5. Run it persistently with systemd
+
+This keeps it running after you disconnect and restarts it if it crashes:
+
+
+# /etc/systemd/system/wrms.service
+[Unit]
+Description=WRMS MUD Server
+After=network.target
+
+[Service]
+WorkingDirectory=/home/your-user/WRMSTextAdventure
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+User=your-user
+
+[Install]
+WantedBy=multi-user.target
+
+sudo systemctl enable wrms
+sudo systemctl start wrms
+6. Update client.py for players
+
+Change HOST = "127.0.0.1" to your Droplet's IP address, then distribute client.py to students. They just need Python installed — no other dependencies on their end.
+
+What students need on their machine: Python 3 only. They run python3 client.py and it connects. No bcrypt, no sqlite3 needed client-side — all of that lives on the server.
+
+One thing to consider: port 4000 is fine for testing but schools sometimes block non-standard ports. If that's an issue, port 443 (HTTPS) is almost never blocked — you'd just change PORT = 443 in both files and open it in the firewall.

@@ -462,61 +462,132 @@ def _get_room_mobs(room_name):
     return game_state.room_mobs[room_name]
 
 
-async def display_room(room_name, player):
-    room = room_dict[room_name]
-    lines = [room["name"], "", room["desc"], ""]
+def _room_sections(room_name, viewer):
+    """Return an ordered list of (heading, value_string) pairs for a room's contents.
 
-    visible = []
-    for npc_key in room.get("npcs", []):
-        npc = npc_dict.get(npc_key)
-        if npc:
-            visible.append(f"- {npc['name']}: {npc['desc']}")
-    for m in _get_room_mobs(room_name):
-        info = mob_dict[m.name]
-        visible.append(f"- {info['name']}: {info['desc']}")
-    for p in game_state.players.values():
-        if p.current_room == room_name and p is not player:
-            visible.append(f"- {p.name} is here.")
-    for item_key in room.get("items", []):
-        visible.append(f"- {_item_display_name(item_key)} is on the ground.")
-    if visible:
-        lines.append("You see:")
-        lines.extend(visible)
-        lines.append("")
+    Used by both display_room and the `look <category>` subcommands so the
+    formatting is defined in one place.
+    """
+    room  = room_dict[room_name]
+    parts = []
 
-    cardinal = [DIR_NAMES[ex].capitalize() for ex in room.get("exits", {}) if ex in DIR_NAMES]
-    special  = [ex.capitalize()           for ex in room.get("exits", {}) if ex not in DIRECTIONS]
+    npc_names = [npc_dict[k]["name"] for k in room.get("npcs", []) if k in npc_dict]
+    if npc_names:
+        parts.append(("NPCs", ", ".join(npc_names)))
 
-    if cardinal:
-        lines.append("Exits: " + ", ".join(cardinal))
-    if special:
-        lines.append("Special exits: " + ", ".join(special))
+    mob_names = [mob_dict[m.name]["name"] for m in _get_room_mobs(room_name)]
+    if mob_names:
+        parts.append(("Mobs", ", ".join(mob_names)))
 
-    room_features = [
-        features_dict[f]["name"]
-        for f in room.get("features", [])
-        if f in features_dict
+    others = [
+        p.name for p in game_state.players.values()
+        if p.current_room == room_name and p is not viewer
     ]
+    if others:
+        parts.append(("Players", ", ".join(others)))
+
+    items = room.get("items", [])
+    if items:
+        parts.append(("Items", "Many" if len(items) > 5 else ", ".join(_item_display_name(k) for k in items)))
+
+    room_features = [features_dict[f]["name"] for f in room.get("features", []) if f in features_dict]
     if room_features:
-        lines.append("Features: " + ", ".join(room_features))
+        parts.append(("Features", ", ".join(room_features)))
+
+    all_exits = (
+        [DIR_NAMES[ex].capitalize() for ex in room.get("exits", {}) if ex in DIR_NAMES] +
+        [ex.capitalize()            for ex in room.get("exits", {}) if ex not in DIRECTIONS]
+    )
+    if all_exits:
+        parts.append(("Exits", ", ".join(all_exits)))
+
+    return parts
+
+
+async def display_room(room_name, player, force_full=False):
+    room = room_dict[room_name]
+    first_visit = room_name not in player.visited_rooms
+    player.visited_rooms.add(room_name)
+
+    lines = [room["name"]]
+
+    show_desc = force_full or first_visit or not player.concise_mode
+    if show_desc:
+        lines += ["", room["desc"]]
+
+    lines.append("")
+    for heading, value in _room_sections(room_name, player):
+        lines.append(f"{heading}: {value}")
 
     await player.send("\n".join(lines))
 
 
+async def cmd_concise(player, args, _gs):
+    sub = args.casefold().strip() if args else ""
+    if sub == "on":
+        player.concise_mode = True
+    elif sub == "off":
+        player.concise_mode = False
+    else:
+        player.concise_mode = not player.concise_mode
+
+    if player.concise_mode:
+        await player.send(
+            "Concise mode ON. Room descriptions will only be shown on your first visit.\n"
+            "Type 'look' at any time to read the full description. Type 'concise off' to disable."
+        )
+    else:
+        await player.send("Concise mode OFF. Full room descriptions will always be shown.")
+
+
+_LOOK_CATEGORIES = {
+    "npcs":     "NPCs",
+    "npc":      "NPCs",
+    "mobs":     "Mobs",
+    "mob":      "Mobs",
+    "enemies":  "Mobs",
+    "players":  "Players",
+    "people":   "Players",
+    "items":    "Items",
+    "item":     "Items",
+    "features": "Features",
+    "feature":  "Features",
+    "exits":    "Exits",
+    "exit":     "Exits",
+}
+
+
 async def cmd_look(player, args, gs):
     if not args:
-        await display_room(player.current_room, player)
+        await display_room(player.current_room, player, force_full=True)
         return
-    target = args.casefold()
-    for npc_key in room_dict[player.current_room].get("npcs", []):
+
+    target = args.casefold().strip()
+
+    # Category shortcut — show just that section
+    if target in _LOOK_CATEGORIES:
+        heading = _LOOK_CATEGORIES[target]
+        # Items: always list everything individually when explicitly requested
+        if heading == "Items":
+            items = room_dict[player.current_room].get("items", [])
+            value = ", ".join(_item_display_name(k) for k in items) if items else None
+        else:
+            sections = dict(_room_sections(player.current_room, player))
+            value = sections.get(heading)
+        await player.send(f"{heading}: {value}" if value else f"{heading}: None")
+        return
+
+    # Look at a specific NPC, mob, or player by name
+    room_name = player.current_room
+    for npc_key in room_dict[room_name].get("npcs", []):
         if target in npc_key.casefold() or target in npc_dict[npc_key]["name"].casefold():
             await player.send(npc_dict[npc_key]["desc"])
             return
     for p in gs.players.values():
-        if p.current_room == player.current_room and target in p.name.casefold():
+        if p.current_room == room_name and target in p.name.casefold():
             await player.send(f"{p.name} is a player adventuring through WRMS.")
             return
-    for m in _get_room_mobs(player.current_room):
+    for m in _get_room_mobs(room_name):
         if target in m.name.casefold():
             await player.send(mob_dict[m.name]["desc"])
             return
@@ -1800,6 +1871,7 @@ async def cmd_reset_password(player, args, gs):
 commands_dict = {
     "quit":        {"func": cmd_quit,        "desc": "Disconnect from the MUD."},
     "help":        {"func": cmd_help,        "desc": "List all commands."},
+    "concise":     {"func": cmd_concise,     "desc": "Toggle concise mode (skips room descriptions on revisits): concise [on|off]"},
     "look":        {"func": cmd_look,        "desc": "Look at the room, or 'look <name>' to examine something."},
     "l":           {"func": cmd_look,        "desc": "Alias for look."},
     "say":         {"func": cmd_say,         "desc": "Say something to everyone in the room."},

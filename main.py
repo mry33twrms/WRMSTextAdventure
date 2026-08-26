@@ -7,7 +7,7 @@ from commands import handle_command, display_room, _hostile_check_loop, _party_l
 from rooms import room_dict
 from config import PWD_SIGNAL
 
-VERSION = "0.19"
+VERSION = "0.20"
 HOST = "0.0.0.0"
 PORT = 4000
 
@@ -61,6 +61,8 @@ def _load_player_from_db(player, data):
     player.quests            = json.loads(data["quests"])
     player.quest_items       = json.loads(data["quest_items"])
     player.received_npc_items = set(json.loads(data["received_npc_items"]))
+    player.concise_mode  = bool(data.get("concise_mode", 0))
+    player.visited_rooms = set(json.loads(data.get("visited_rooms", "[]")))
     # Normalize legacy saves: equipped items must not also sit in inventory
     for key in player.equipped_items.values():
         if key and key in player.inventory:

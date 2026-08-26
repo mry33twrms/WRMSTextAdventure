@@ -2,6 +2,26 @@
 
 ---
 
+## v0.20 — Concise Mode (Screen Reader Accessibility)
+
+Built for players using screen readers or who prefer less text when navigating familiar areas.
+
+### `concise` command
+- `concise` or `concise on/off` — toggles concise mode; bare `concise` flips the current state
+- On enable: confirmation message explains the behaviour and how to use `look`
+
+### `display_room` changes
+- Tracks `player.visited_rooms` (persisted to DB); marks a room visited on first display
+- In concise mode: **first visit** always shows the full description; **revisits** show only the room name, contents (NPCs/mobs/items/other players), and exits — description and features suppressed
+- `look` (explicit command) always forces the full description regardless of mode, so players can read any room on demand
+- Outside concise mode: behaviour is unchanged — full description every time
+
+### Persistence
+- `player.concise_mode` (bool) and `player.visited_rooms` (set of room keys) saved to `player_data` table
+- DB migration in `database._migrate()` adds the two new columns safely on existing databases (`ALTER TABLE … ADD COLUMN` with a try/except for already-existing columns)
+
+---
+
 ## v0.19 — Equip Fixes, Password Masking & Admin Create
 
 ### Bug fixes

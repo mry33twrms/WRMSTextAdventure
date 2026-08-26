@@ -11,6 +11,21 @@ def get_conn():
     return conn
 
 
+def _migrate(conn):
+    """Add columns introduced after the initial schema without breaking existing DBs."""
+    migrations = [
+        "ALTER TABLE player_data ADD COLUMN concise_mode  INTEGER DEFAULT 0",
+        "ALTER TABLE player_data ADD COLUMN visited_rooms TEXT    DEFAULT '[]'",
+    ]
+    c = conn.cursor()
+    for sql in migrations:
+        try:
+            c.execute(sql)
+        except Exception:
+            pass  # column already exists
+    conn.commit()
+
+
 def init_db():
     conn = get_conn()
     conn.executescript("""
@@ -47,6 +62,7 @@ def init_db():
         );
     """)
     conn.commit()
+    _migrate(conn)
     conn.close()
 
 
@@ -143,7 +159,9 @@ def save_player_data(player):
             respawn_point      = ?,
             quests             = ?,
             quest_items        = ?,
-            received_npc_items = ?
+            received_npc_items = ?,
+            concise_mode       = ?,
+            visited_rooms      = ?
         WHERE name = ?
     """, (
         player.gold,
@@ -165,6 +183,8 @@ def save_player_data(player):
         json.dumps(player.quests),
         json.dumps(player.quest_items),
         json.dumps(list(player.received_npc_items)),
+        int(player.concise_mode),
+        json.dumps(list(player.visited_rooms)),
         player.name,
     ))
     conn.commit()

@@ -46,6 +46,10 @@ class Player:
         self.role       = "player"  # "player" | "admin" — set from DB on login
         self.reset_mode = None      # None | {"target": name, "step": "new"|"confirm", "pending": pw}
 
+        # Accessibility
+        self.concise_mode  = False  # when True, skip room descriptions on revisits
+        self.visited_rooms = set()  # room keys seen at least once
+
         # Party / messaging
         self.party       = None  # Party object, or None
         self.last_sender = None  # name of last player who sent a tell
